@@ -11,15 +11,15 @@ class HMDB_Downloader:
 
     def get_file_name_from_url(self, url):
         url_path = pathlib.PurePosixPath(urllib.parse.urlparse(url).path)
-        return  url_path.name.name
+        return url_path
 
-    def run(self,directory):
+    def run(self, directory):
 
         URL_SPECTRA = 'http://specdb.wishartlab.com/downloads/exports/spectra_xml/hmdb_nmr_spectra.zip'
         URL_METABOLITES = 'http://www.hmdb.ca/system/downloads/current/hmdb_metabolites.zip'
 
         spectra_name =self.get_file_name_from_url(URL_SPECTRA).stem
-        target_directory =  pathlib.Path(directory,spectra_name)
+        target_directory = pathlib.Path(directory, spectra_name)
 
         self.download_and_extract_xml_zip(URL_SPECTRA, target_directory)
         self.download_and_extract_xml_zip(URL_METABOLITES, target_directory)
@@ -28,7 +28,9 @@ class HMDB_Downloader:
 
     def download_and_extract_xml_zip(self, URL, directory):
 
-        file = self.get_path_from_url(URL)
+        file = self.get_file_name_from_url(URL).name
+        extension = self.get_file_name_from_url(URL).stem
+        directory = pathlib.Path(directory, extension)
         zip_target = pathlib.Path(directory, file)
 
         target = pathlib.Path(directory)
@@ -45,7 +47,7 @@ class HMDB_Downloader:
         print(f"download and extract complete")
         print(f"    removing zip file  {zip_target}")
 
-        zip_target.unlink
+        zip_target.unlink()
 
 
 class BMRB_Downloader:
@@ -114,11 +116,11 @@ class MMCD_Downloader:
                 print("  failed to download...")
 
 if __name__ == '__main__':
-    # downloader = HMDB_Downloader()
-    # downloader.run('/home/mh491/Metameta_Files')
-
-    downloader = BMRB_Downloader()
+    downloader = HMDB_Downloader()
     downloader.run('/home/mh491/Metameta_Files')
+
+    # downloader = BMRB_Downloader()
+    # downloader.run('/home/mh491/Metameta_Files')
 
     # downloader = MMCD_Downloader()
     # downloader.run('/home/mh491/Metameta_Files')

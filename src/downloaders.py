@@ -29,8 +29,6 @@ class HMDB_Downloader:
     def download_and_extract_xml_zip(self, URL, directory):
 
         file = self.get_file_name_from_url(URL).name
-        extension = self.get_file_name_from_url(URL).stem
-        directory = pathlib.Path(directory, extension)
         zip_target = pathlib.Path(directory, file)
 
         target = pathlib.Path(directory)

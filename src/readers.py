@@ -297,13 +297,14 @@ if __name__ == "__main__":
     # metabolite_reader = HMDB_Metabolites_to_CSV(directory)
     # metabolite_reader.run()
 
-    #reader = HMDB_Reader(directory)
-    # reader = HMDB_to_CSV(directory)
-    # reader.run()
-
-    directory = '/home/mh491/Metameta_Files/bmrb_nmr_spectra'
-    reader = BMRB_to_CSV(directory)
+    directory = '/home/mh491/Metameta_Files/hmdb_nmr_spectra'
+    reader = HMDB_Reader(directory)
+    reader = HMDB_to_CSV(directory)
     reader.run()
+
+    # directory = '/home/mh491/Metameta_Files/bmrb_nmr_spectra'
+    # reader = BMRB_to_CSV(directory)
+    # reader.run()
 
     # directory = '/home/mh491/Metameta_Files/mmcd_nmr_spectra'
     # reader = MMCD_Reader(directory)

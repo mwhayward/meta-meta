@@ -26,8 +26,8 @@ class Match:
                 self.names[row[0]] = row[1]
 
     def load(self):
-        cwd =  os.getcwd()
-        for directory in ['hmdb_nmr_spectra','mmcd_nmr_spectra','bmrb_nmr_spectra']:
+        cwd = '/home/mh491/Metameta_Files'
+        for directory in ['hmdb_nmr_spectra', 'bmrb_nmr_spectra']:
             path = (pathlib.Path(cwd,directory))
             self.load_shifts(path)
             self.load_names(path)

@@ -32,7 +32,8 @@ class HMDB_Downloader:
         zip_target = pathlib.Path(directory, file)
 
         target = pathlib.Path(directory)
-
+        if not target.exists():
+            target.mkdir()
         print(f'Beginning download of {file}...')
         print(f"    target directory is {target}")
 

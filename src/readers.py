@@ -89,6 +89,7 @@ class HMDB_Reader:
             tree = et.parse(file)
             root = tree.getroot()
             for spectrum in root.iter('nmr-one-d'):
+                # TODO: add variable to read nucleus of interest eg. 1H, 13C etc
                 if spectrum.find('nucleus').text == "13C":
                     spectrum_id = spectrum.find('id').text
                     molecule_id = spectrum.find('database-id').text[4:].lstrip('0')
@@ -299,7 +300,7 @@ if __name__ == "__main__":
 
     directory = '/home/mh491/Metameta_Files/hmdb_nmr_spectra'
     reader = HMDB_Reader(directory)
-    reader = HMDB_to_CSV(directory)
+    # reader = HMDB_to_CSV(directory)
     reader.run()
 
     # directory = '/home/mh491/Metameta_Files/bmrb_nmr_spectra'

@@ -13,7 +13,7 @@ class HMDB_Downloader:
         url_path = pathlib.PurePosixPath(urllib.parse.urlparse(url).path)
         return url_path
 
-    def run(self, directory, downloads='hmdb'):
+    def run(self, directory, biofluid='hmdb'):
 
         URL_SPECTRA = 'http://specdb.wishartlab.com/downloads/exports/spectra_xml/hmdb_nmr_spectra.zip'
         URL_METABOLITES = 'http://www.hmdb.ca/system/downloads/current/' + downloads + '_metabolites.zip'

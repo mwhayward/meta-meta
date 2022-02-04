@@ -58,27 +58,27 @@ class BMRB_Downloader:
 
         def handle_starttag(self, tag, attrs):
             if tag == 'a':
-                href  = [elem for elem in attrs if elem[0] == 'href'][0][1]
-                if href.startswith('bmst'):
+                href = [elem for elem in attrs if elem[0] == 'href'][0][1]
+                if href.startswith('bmse'):
                     file_name = f'{attrs[0][1][:-1]}.str'
                     href = f'{href}{file_name}'
                     self.files.append(href)
 
     def run(self,directory):
-        URL = 'http://bmrb.io/ftp/pub/bmrb/metabolomics/entry_directories/'
+        URL = 'https://bmrb.io/ftp/pub/bmrb/metabolomics/entry_directories/'
         bmrb_directory = urllib.request.urlopen(URL).read().decode('utf-8')
 
         parser = BMRB_Downloader.BMRB_Directory_Parser()
         parser.feed(bmrb_directory)
 
-        download_directory  = pathlib.Path(directory,'bmrb_nmr_spectra')
+        download_directory = pathlib.Path(directory, 'bmrb_nmr_spectra')
         download_directory.mkdir(exist_ok=True)
 
-        for i,file in enumerate(parser.files):
+        for i, file in enumerate(parser.files):
             file_url = URL + file
-            file =  pathlib.Path(file).parts[-1]
+            file = pathlib.Path(file).parts[-1]
             target = pathlib.Path(download_directory, file)
-            print (f'download {file} {i+1} of {len(parser.files)}')
+            print(f'download {file} {i+1} of {len(parser.files)}')
             urllib.request.urlretrieve(file_url, target)
 
 class MMCD_Downloader:
@@ -115,11 +115,11 @@ class MMCD_Downloader:
                 print("  failed to download...")
 
 if __name__ == '__main__':
-    downloader = HMDB_Downloader()
-    downloader.run('/home/mh491/Metameta_Files')
-
-    # downloader = BMRB_Downloader()
+    # downloader = HMDB_Downloader()
     # downloader.run('/home/mh491/Metameta_Files')
+
+    downloader = BMRB_Downloader()
+    downloader.run('/home/mh491/Metameta_Files')
 
     # downloader = MMCD_Downloader()
     # downloader.run('/home/mh491/Metameta_Files')

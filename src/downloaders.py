@@ -16,7 +16,7 @@ class HMDB_Downloader:
     def run(self, directory, biofluid='hmdb'):
 
         URL_SPECTRA = 'http://specdb.wishartlab.com/downloads/exports/spectra_xml/hmdb_nmr_spectra.zip'
-        URL_METABOLITES = 'http://www.hmdb.ca/system/downloads/current/' + downloads + '_metabolites.zip'
+        URL_METABOLITES = 'http://www.hmdb.ca/system/downloads/current/' + biofluid + '_metabolites.zip'
 
         spectra_name =self.get_file_name_from_url(URL_SPECTRA).stem
         target_directory = pathlib.Path(directory, spectra_name)

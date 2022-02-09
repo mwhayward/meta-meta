@@ -90,9 +90,9 @@ class HMDB_Reader:
             root = tree.getroot()
             for spectrum in root.iter('nmr-one-d'):
                 # TODO: add variable to read nucleus of interest eg. 1H, 13C etc
-                if spectrum.find('nucleus').text == "13C":
+                if spectrum.find('nucleus').text == "1H":
                     spectrum_id = spectrum.find('id').text
-                    molecule_id = spectrum.find('database-id').text[4:].lstrip('0')
+                    molecule_id = spectrum.find('database-id').text[4:]
                     shifts = []
 
                     peaks = spectrum.find("nmr-one-d-peaks")

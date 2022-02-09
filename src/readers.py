@@ -68,13 +68,16 @@ class HMDB_Reader:
     def __init__(self, directory):
         self._directory = directory
 
-    def shifts_as_list(self, shifts):
-        return ', '.join(["%7.3f" % shift for shift in shifts])
+    def shifts_as_list(self, peak_list):
+        return ', '.join(["%7.3f" % peak[0] for peak in peak_list])
 
-    def output(self, file, molecule_id, spectrum_id, shifts):
+    def intensities_as_list(self, peak_list):
+        return ', '.join(["%7.3f" % peak[-1] for peak in peak_list])
+
+    def output(self, file, molecule_id, spectrum_id, ph, reference, temperature, peak_list):
         print(f"file: {file}")
         print(f"id:   HMDB-{molecule_id}")
-        shifts = self.shifts_as_list(shifts)
+        shifts = self.shifts_as_list(peak_list)
         print(f"shifts: {shifts}")
         print()
 
@@ -93,31 +96,44 @@ class HMDB_Reader:
                 if spectrum.find('nucleus').text == "1H":
                     spectrum_id = spectrum.find('id').text
                     molecule_id = spectrum.find('database-id').text[4:]
-                    shifts = []
+                    frequency = spectrum.find('frequency').text
+                    ph = spectrum.find('sample-ph').text
+                    reference = spectrum.find('chemical-shift-reference').text
+                    temperature = spectrum.find('sample-temperature').text
+                    peak_list = []
 
                     peaks = spectrum.find("nmr-one-d-peaks")
 
                     for peak in peaks:
-                        shifts.append(float(peak.find("chemical-shift").text))
+                        shift = float(peak.find("chemical-shift").text)
+                        intensity = float(peak.find("chemical-shift").text)
+                        peak_list.append((shift, intensity))
 
-                    shifts = sorted(shifts)
+                    peak_list = sorted(peak_list)
 
-                    self.output(file, molecule_id, spectrum_id, shifts)
+                    self.output(file, molecule_id, spectrum_id, frequency, ph, reference, temperature, peak_list)
 
 
 class HMDB_to_CSV(HMDB_Reader):
 
     def __init__(self, directory):
         super(HMDB_to_CSV, self).__init__(directory)
-        self.out_file = 'id_shifts.csv'
+        self.metabolites_out_file = 'hmdb_xml_metbolites.csv'
+        self. multiplets_out_file = 'hmdb_xml_mmultiplets.csv'
+        self.peaks_out_file = 'hmdb_xml_peaks.csv'
 
     def run(self):
-        with open(pathlib.Path(directory, self.out_file), 'w') as self.csv_file:
+        with open(pathlib.Path(directory, self.metabolites_out_file), 'w') as self.metabolites_csv_file, \
+             open(pathlib.Path(directory, self.multiplets_out_file), 'w') as self.multiplets_csv_file, \
+             open(pathlib.Path(directory, self.peaks_out_file), 'w') as self.peaks_csv_file:
             super(HMDB_to_CSV, self).run()
 
-    def output(self, file, molecule_id, spectrum_id, shifts):
-        shifts_text = self.shifts_as_list(shifts)
+    def output(self, file, molecule_id, spectrum_id, ph, reference, temperature, peak_list):
+        shifts_text = self.shifts_as_list(peak_list)
+        intensities_text = self.intensities_as_list(peak_list)
         print(f'HMDB-{molecule_id}, {spectrum_id}, {shifts_text}', file=self.csv_file)
+        # TODO: complete output to write to each file for spectrum, multiplets and peaks.
+        #  Might not need the shifts/intensities_text methods
 
 
 class BMRB_Reader:

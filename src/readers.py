@@ -74,7 +74,7 @@ class HMDB_Reader:
     def intensities_as_list(self, peak_list):
         return ', '.join(["%7.3f" % peak[-1] for peak in peak_list])
 
-    def output(self, file, molecule_id, spectrum_id, ph, reference, temperature, peak_list):
+    def output(self, file, molecule_id, spectrum_id, frequency, ph, reference, temperature, peak_list):
         print(f"file: {file}")
         print(f"id:   HMDB-{molecule_id}")
         shifts = self.shifts_as_list(peak_list)
@@ -95,7 +95,7 @@ class HMDB_Reader:
                 # TODO: add variable to read nucleus of interest eg. 1H, 13C etc
                 if spectrum.find('nucleus').text == "1H":
                     spectrum_id = spectrum.find('id').text
-                    molecule_id = spectrum.find('database-id').text[4:]
+                    molecule_id = spectrum.find('database-id').text
                     frequency = spectrum.find('frequency').text
                     ph = spectrum.find('sample-ph').text
                     reference = spectrum.find('chemical-shift-reference').text
@@ -128,10 +128,13 @@ class HMDB_to_CSV(HMDB_Reader):
              open(pathlib.Path(directory, self.peaks_out_file), 'w') as self.peaks_csv_file:
             super(HMDB_to_CSV, self).run()
 
-    def output(self, file, molecule_id, spectrum_id, ph, reference, temperature, peak_list):
+    def output(self, file, molecule_id, spectrum_id, frequency, ph, reference, temperature, peak_list):
         shifts_text = self.shifts_as_list(peak_list)
         intensities_text = self.intensities_as_list(peak_list)
-        print(f'HMDB-{molecule_id}, {spectrum_id}, {shifts_text}', file=self.csv_file)
+        print(f'{molecule_id}, {spectrum_id}, {frequency}, {ph}, {reference}, {temperature}', file=self.metabolites_csv_file)
+        for i, peak in enumerate(peak_list):
+            print(f'{molecule_id}.{i+1}, {molecule_id}, {peak[0]}, {peak[-1]}', file=self.peaks_csv_file)
+
         # TODO: complete output to write to each file for spectrum, multiplets and peaks.
         #  Might not need the shifts/intensities_text methods
 
@@ -315,8 +318,8 @@ if __name__ == "__main__":
     # metabolite_reader.run()
 
     directory = '/home/mh491/Metameta_Files/hmdb_nmr_spectra'
-    reader = HMDB_Reader(directory)
-    # reader = HMDB_to_CSV(directory)
+    # reader = HMDB_Reader(directory)
+    reader = HMDB_to_CSV(directory)
     reader.run()
 
     # directory = '/home/mh491/Metameta_Files/bmrb_nmr_spectra'

@@ -1,4 +1,4 @@
-
+import requests
 import urllib.request
 import zipfile
 import pathlib
@@ -38,6 +38,7 @@ class HMDB_Downloader:
         print(f"    target directory is {target}")
 
         urllib.request.urlretrieve(URL, zip_target)
+        print(f'{file} successfully downloaded')
 
         zip_file = pathlib.Path(directory, file)
         with zipfile.ZipFile(zip_file, 'r') as zip_ref:
@@ -74,12 +75,37 @@ class BMRB_Downloader:
         download_directory = pathlib.Path(directory, 'bmrb_nmr_spectra')
         download_directory.mkdir(exist_ok=True)
 
+        print('xml download start:')
+
         for i, file in enumerate(parser.files):
             file_url = URL + file
-            file = pathlib.Path(file).parts[-1]
-            target = pathlib.Path(download_directory, file)
-            print(f'download {file} {i+1} of {len(parser.files)}')
-            urllib.request.urlretrieve(file_url, target)
+            bruker_file_url = URL + pathlib.Path(file).parts[0] + '/nmr'
+            star_file_end = pathlib.Path(file).parts[-1]
+            xml_file_end = pathlib.Path(file).parts[0] + '.xml'
+            star_target = pathlib.Path(download_directory, star_file_end)
+            xml_target = pathlib.Path(download_directory, xml_file_end)
+            # urllib.request.urlretrieve(file_url, target)
+            response = requests.get(bruker_file_url +'/set01')
+            if response.status_code == 200:
+                response = requests.get(bruker_file_url +'/set01/1/pdata/1/peaklist.xml')
+                if response.status_code == 200:
+                    urllib.request.urlretrieve(bruker_file_url + '/set01/1/pdata/1/peaklist.xml', xml_target)
+                else:
+                    response = requests.get(bruker_file_url + '/set01/1H/pdata/1/peaklist.xml')
+                    if response.status_code == 200:
+                        urllib.request.urlretrieve(bruker_file_url + '/set01/1H/pdata/1/peaklist.xml', xml_target)
+                    else:
+                        print(f'no bruker file found for {xml_file_end}')
+
+            else:
+                print(f'no {xml_file_end}')
+                '''try:
+                    urllib.request.urlopen(bruker_file_url +'set01/1/pdata/1')
+                    print(f'{file} found')
+                except:
+                    print(f'{bruker_file_url} not found')'''
+            # print(f'download {file} {i+1} of {len(parser.files)}')
+
 
 class MMCD_Downloader:
     # class BMRB_Directory_Parser(HTMLParser):

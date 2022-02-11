@@ -2,6 +2,7 @@ import pathlib
 import xml.etree.ElementTree as et
 import nmrstarlib
 import sys
+import statistics
 
 
 class HMDB_Metabolite_Reader:
@@ -74,7 +75,7 @@ class HMDB_Reader:
     def intensities_as_list(self, peak_list):
         return ', '.join(["%7.3f" % peak[-1] for peak in peak_list])
 
-    def output(self, file, molecule_id, spectrum_id, frequency, ph, reference, temperature, peak_list):
+    def output(self, file, spectrum_id, molecule_id, frequency, ph, reference, temperature,multiplet_list, peak_list):
         print(f"file: {file}")
         print(f"id:   HMDB-{molecule_id}")
         shifts = self.shifts_as_list(peak_list)
@@ -96,22 +97,34 @@ class HMDB_Reader:
                 if spectrum.find('nucleus').text == "1H":
                     spectrum_id = spectrum.find('id').text
                     molecule_id = spectrum.find('database-id').text
-                    frequency = spectrum.find('frequency').text
+                    if spectrum.find('frequency').text:
+                        frequency = spectrum.find('frequency').text.rstrip(' MHz')
+                    else:
+                        frequency = None
                     ph = spectrum.find('sample-ph').text
                     reference = spectrum.find('chemical-shift-reference').text
                     temperature = spectrum.find('sample-temperature').text
                     peak_list = []
+                    multiplet_list = []
 
-                    peaks = spectrum.find("nmr-one-d-peaks")
+                    multiplets = spectrum.findall("nmr-one-d-peaks")
+                    for i, multiplet in enumerate(multiplets):
+                        midpoint_list = []
+                        for j, peak in enumerate(multiplet):
+                            peak_id = f'{spectrum_id}.{i+1}.{j+1}'
+                            shift = float(peak.find("chemical-shift").text)
+                            if peak.find("intensity").text:
+                                intensity = float(peak.find("intensity").text)
+                            else:
+                                intensity = None
+                            peak_list.append((peak_id, shift, intensity))
+                            midpoint_list.append(shift)
+                        midpoint = statistics.median(midpoint_list)
+                        multiplet_list.append((f'{spectrum_id}.{i+1}', midpoint))
 
-                    for peak in peaks:
-                        shift = float(peak.find("chemical-shift").text)
-                        intensity = float(peak.find("chemical-shift").text)
-                        peak_list.append((shift, intensity))
+                    # peak_list = sorted(peak_list)
 
-                    peak_list = sorted(peak_list)
-
-                    self.output(file, molecule_id, spectrum_id, frequency, ph, reference, temperature, peak_list)
+                    self.output(file, spectrum_id, molecule_id, frequency, ph, reference, temperature, multiplet_list, peak_list)
 
 
 class HMDB_to_CSV(HMDB_Reader):
@@ -128,15 +141,15 @@ class HMDB_to_CSV(HMDB_Reader):
              open(pathlib.Path(directory, self.peaks_out_file), 'w') as self.peaks_csv_file:
             super(HMDB_to_CSV, self).run()
 
-    def output(self, file, molecule_id, spectrum_id, frequency, ph, reference, temperature, peak_list):
-        shifts_text = self.shifts_as_list(peak_list)
-        intensities_text = self.intensities_as_list(peak_list)
-        print(f'{molecule_id}, {spectrum_id}, {frequency}, {ph}, {reference}, {temperature}', file=self.metabolites_csv_file)
-        for i, peak in enumerate(peak_list):
-            print(f'{molecule_id}.{i+1}, {molecule_id}, {peak[0]}, {peak[-1]}', file=self.peaks_csv_file)
+    def output(self, file, spectrum_id, molecule_id, frequency, ph, reference, temperature, multiplet_list, peak_list):
+        # shifts_text = self.shifts_as_list(peak_list)
+        # intensities_text = self.intensities_as_list(peak_list)
+        print(f' {spectrum_id}, {molecule_id}, {frequency}, {ph}, {reference}, {temperature}', file=self.metabolites_csv_file)
+        for multiplet in multiplet_list:
+            print(f'{multiplet[0]}, {spectrum_id}, {multiplet[-1]}', file=self.multiplets_csv_file)
+        for peak in peak_list:
+            print(f'{peak[0]}, {spectrum_id}, {peak[1]}, {peak[-1]}', file=self.peaks_csv_file)
 
-        # TODO: complete output to write to each file for spectrum, multiplets and peaks.
-        #  Might not need the shifts/intensities_text methods
 
 
 class BMRB_Reader:

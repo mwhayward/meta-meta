@@ -132,7 +132,7 @@ class HMDB_to_CSV(HMDB_Reader):
     def __init__(self, directory):
         super(HMDB_to_CSV, self).__init__(directory)
         self.metabolites_out_file = 'hmdb_xml_metbolites.csv'
-        self. multiplets_out_file = 'hmdb_xml_mmultiplets.csv'
+        self. multiplets_out_file = 'hmdb_xml_multiplets.csv'
         self.peaks_out_file = 'hmdb_xml_peaks.csv'
 
     def run(self):
@@ -166,24 +166,23 @@ class BMRB_Reader:
                     for i, frame in enumerate(elem):
                         for key in frame.keys():
                             if key == 'Datum.Type':
-                                if frame[key] == 'theoretical chemical shifts' and result != True:
+                                if frame[key] == '1H chemical shifts' and result != True:
                                     result = True
         return result
 
     def get_1h_shifts(self, tree):
         result = []
-        SAVE_FRAME = 'save_theoretical_chem_shifts'
-        LOOP_FRAME = 'Theoretical_chem_shift.Atom_type'
+        SAVE_FRAME = 'save_spectral_peak_1H'
         for top_frame in [top for top in tree if top.startswith(SAVE_FRAME)]:
             for loop in [elem for elem in tree[top_frame] if elem.startswith('loop')]:
                 for elem in tree[top_frame][loop][1:]:
                     for i, line in enumerate(elem):
                         for key in line.keys():
-                            if key == LOOP_FRAME and line[LOOP_FRAME] == 'H':
+                            if key == 'Spectral_transition_char.Chem_shift_val':
                                 try:
-                                    result.append(float(line['Theoretical_chem_shift.Val']))
+                                    result.append(float(line['Spectral_transition_char.Chem_shift_val']))
                                 except:
-                                    print(f"   cound\'t convert {line['Theoretical_chem_shift.Val']} to float")
+                                    print(f"   couldn\'t convert {line['Atom_chem_shift.Val']} to float")
         return result
 
     def shifts_as_list(self, shifts):
@@ -205,8 +204,7 @@ class BMRB_Reader:
 
         file_ids = [int(self.id_to_index(str(file.stem))) for file in directory.iterdir() if file.suffix == '.str']
         for id in sorted(file_ids):
-            file = pathlib.Path(directory, f'bmst{str(id).zfill(6)}.str')
-
+            file = pathlib.Path(directory, f'bmse{str(id).zfill(6)}.str')
             tree = next(nmrstarlib.read_files(str(file)))
 
             name = tree['save_entry_information']['Entry.Title']
@@ -330,14 +328,14 @@ if __name__ == "__main__":
     # metabolite_reader = HMDB_Metabolites_to_CSV(directory)
     # metabolite_reader.run()
 
-    directory = '/home/mh491/Metameta_Files/hmdb_nmr_spectra'
+    # directory = '/home/mh491/Metameta_Files/hmdb_nmr_spectra'
     # reader = HMDB_Reader(directory)
-    reader = HMDB_to_CSV(directory)
-    reader.run()
-
-    # directory = '/home/mh491/Metameta_Files/bmrb_nmr_spectra'
-    # reader = BMRB_to_CSV(directory)
+    # reader = HMDB_to_CSV(directory)
     # reader.run()
+
+    directory = '/home/mh491/Metameta_Files/bmrb_nmr_spectra'
+    reader = BMRB_to_CSV(directory)
+    reader.run()
 
     # directory = '/home/mh491/Metameta_Files/mmcd_nmr_spectra'
     # reader = MMCD_Reader(directory)

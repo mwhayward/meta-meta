@@ -3,7 +3,8 @@ import xml.etree.ElementTree as et
 import nmrstarlib
 import sys
 import statistics
-
+import sqlite3
+from sqlite3 import Error
 
 class HMDB_Metabolite_Reader:
 
@@ -127,29 +128,118 @@ class HMDB_Reader:
                     self.output(file, spectrum_id, molecule_id, frequency, ph, reference, temperature, multiplet_list, peak_list)
 
 
-class HMDB_to_CSV(HMDB_Reader):
+class HMDB_to_MYSQL(HMDB_Reader):
 
     def __init__(self, directory):
-        super(HMDB_to_CSV, self).__init__(directory)
-        self.metabolites_out_file = 'hmdb_xml_metbolites.csv'
-        self. multiplets_out_file = 'hmdb_xml_multiplets.csv'
-        self.peaks_out_file = 'hmdb_xml_peaks.csv'
+        super(HMDB_to_MYSQL, self).__init__(directory)
+        self.conn = None
+        # self.metabolites_out_file = 'hmdb_xml_metbolites.csv'
+        # self. multiplets_out_file = 'hmdb_xml_multiplets.csv'
+        # self.peaks_out_file = 'hmdb_xml_peaks.csv'
+
+    def create_database(self):
+        sql_create_metabolites_table = """ CREATE TABLE IF NOT EXISTS metabolites (
+                                                        metabolite_id integer PRIMARY KEY,
+                                                        hmdb_id text NOT NULL,
+                                                        field integer,
+                                                        ph float,
+                                                        reference text,
+                                                        temperature integer
+                                                    ); """
+
+        sql_create_multiplets_table = """CREATE TABLE IF NOT EXISTS multiplets (
+                                                    multiplet_id float PRIMARY KEY,
+                                                    metabolite_id integer NOT NULL,
+                                                    center float NOT NULL,
+                                                    FOREIGN KEY (metabolite_id) REFERENCES metabolites (id)
+                                                );"""
+
+        sql_create_peaks_table = """CREATE TABLE IF NOT EXISTS peaks (
+                                                    peak_id float PRIMARY KEY,
+                                                    metabolite_id integer NOT NULL,
+                                                    shift float NOT NULL,
+                                                    intensity float NOT NULL,
+                                                    FOREIGN KEY (metabolite_id) REFERENCES metabolites (id)
+                                                );"""
+        if self.conn is not None:
+            self.create_table(sql_create_metabolites_table)
+            self.create_table(sql_create_multiplets_table)
+            self.create_table(sql_create_peaks_table)
+        else:
+            print("Error! cannot create the database connection.")
+
+    def create_table(self, create_table_sql):
+        try:
+            c = self.conn.cursor()
+            c.execute(create_table_sql)
+        except Error as e:
+            print(e)
 
     def run(self):
-        with open(pathlib.Path(directory, self.metabolites_out_file), 'w') as self.metabolites_csv_file, \
-             open(pathlib.Path(directory, self.multiplets_out_file), 'w') as self.multiplets_csv_file, \
-             open(pathlib.Path(directory, self.peaks_out_file), 'w') as self.peaks_csv_file:
-            super(HMDB_to_CSV, self).run()
+        database = r'/home/mh491/Metameta_Files/hmdb_nmr_spectra/hmdb_metabolites.db'
+        try:
+            self.conn = sqlite3.connect(database)
+        except Error as e:
+            print(e)
+        self.create_database()
+
+        #with open(pathlib.Path(directory, self.metabolites_out_file), 'w') as self.metabolites_csv_file, \
+        #     open(pathlib.Path(directory, self.multiplets_out_file), 'w') as self.multiplets_csv_file, \
+        #     open(pathlib.Path(directory, self.peaks_out_file), 'w') as self.peaks_csv_file:
+        super(HMDB_to_MYSQL, self).run()
 
     def output(self, file, spectrum_id, molecule_id, frequency, ph, reference, temperature, multiplet_list, peak_list):
         # shifts_text = self.shifts_as_list(peak_list)
         # intensities_text = self.intensities_as_list(peak_list)
-        print(f' {spectrum_id}, {molecule_id}, {frequency}, {ph}, {reference}, {temperature}', file=self.metabolites_csv_file)
+        # print(f' {spectrum_id}, {molecule_id}, {frequency}, {ph}, {reference}, {temperature}', file=self.metabolites_csv_file)
+        # for multiplet in multiplet_list:
+        #     print(f'{multiplet[0]}, {spectrum_id}, {multiplet[-1]}', file=self.multiplets_csv_file)
+        # for peak in peak_list:
+        #     print(f'{peak[0]}, {spectrum_id}, {peak[1]}, {peak[-1]}', file=self.peaks_csv_file)
+        metabolite_data = (spectrum_id, molecule_id, frequency, ph, reference, temperature)
+        try:
+            self.create_metabolite(metabolite_data)
+        except Error as e:
+            print(e)
+            print(f'error with metabolite: {spectrum_id}')
         for multiplet in multiplet_list:
-            print(f'{multiplet[0]}, {spectrum_id}, {multiplet[-1]}', file=self.multiplets_csv_file)
+            multiplet_data = (multiplet[0], spectrum_id, multiplet[-1])
+            try:
+                self.create_multiplet(multiplet_data)
+            except Error as e:
+                print(e)
+                print(f'error with multiplet: {multiplet_data[0]}')
         for peak in peak_list:
-            print(f'{peak[0]}, {spectrum_id}, {peak[1]}, {peak[-1]}', file=self.peaks_csv_file)
+            peak_data = (peak[0], spectrum_id, peak[1], peak[-1])
+            try:
+                self.create_peak(peak_data)
+            except Error as e:
+                print(e)
+                print(f'error with peak: {peak_data[0]}')
 
+    def create_metabolite(self, metabolite):
+        sql = ''' INSERT INTO metabolites(metabolite_id, hmdb_id, field, ph, reference, temperature)
+                  VALUES(?,?,?,?,?,?) '''
+        cur = self.conn.cursor()
+        cur.execute(sql, metabolite)
+        self.conn.commit()
+        return cur.lastrowid
+
+    def create_multiplet(self, multiplet):
+        sql = ''' INSERT INTO multiplets(multiplet_id, metabolite_id, center)
+                  VALUES(?,?,?) '''
+        cur = self.conn.cursor()
+        cur.execute(sql, multiplet)
+        self.conn.commit()
+        return cur.lastrowid
+
+    def create_peak(self, peak):
+        sql = ''' INSERT INTO peaks(peak_id, metabolite_id, shift, intensity)
+                  VALUES(?,?,?,?) '''
+        cur = self.conn.cursor()
+        cur.execute(sql, peak)
+        self.conn.commit()
+        return cur.lastrowid
 
 
 class BMRB_Reader:
@@ -328,14 +418,14 @@ if __name__ == "__main__":
     # metabolite_reader = HMDB_Metabolites_to_CSV(directory)
     # metabolite_reader.run()
 
-    # directory = '/home/mh491/Metameta_Files/hmdb_nmr_spectra'
+    directory = '/home/mh491/Metameta_Files/hmdb_nmr_spectra'
     # reader = HMDB_Reader(directory)
-    # reader = HMDB_to_CSV(directory)
-    # reader.run()
-
-    directory = '/home/mh491/Metameta_Files/bmrb_nmr_spectra'
-    reader = BMRB_to_CSV(directory)
+    reader = HMDB_to_MYSQL(directory)
     reader.run()
+
+    # directory = '/home/mh491/Metameta_Files/bmrb_nmr_spectra'
+    # reader = BMRB_to_CSV(directory)
+    # reader.run()
 
     # directory = '/home/mh491/Metameta_Files/mmcd_nmr_spectra'
     # reader = MMCD_Reader(directory)

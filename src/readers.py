@@ -47,7 +47,7 @@ class HMDB_Metabolite_Reader:
                 for accession in elem.findall('{http://www.hmdb.ca}accession'):
                     accession = accession.text
                 for name in elem.findall('{http://www.hmdb.ca}name'):
-                    name = name.text
+                    name = name.text.replace(',', '-')
                 self.output(accession, name)
                 elem.clear()
 
@@ -414,14 +414,14 @@ class MMCD_to_CSV(MMCD_Reader):
 
 
 if __name__ == "__main__":
-    # directory = '/home/mh491/Metameta_Files/hmdb_nmr_spectra'
-    # metabolite_reader = HMDB_Metabolites_to_CSV(directory)
-    # metabolite_reader.run()
-
     directory = '/home/mh491/Metameta_Files/hmdb_nmr_spectra'
+    metabolite_reader = HMDB_Metabolites_to_CSV(directory)
+    metabolite_reader.run()
+
+    # directory = '/home/mh491/Metameta_Files/hmdb_nmr_spectra'
     # reader = HMDB_Reader(directory)
-    reader = HMDB_to_MYSQL(directory)
-    reader.run()
+    # reader = HMDB_to_MYSQL(directory)
+    # reader.run()
 
     # directory = '/home/mh491/Metameta_Files/bmrb_nmr_spectra'
     # reader = BMRB_to_CSV(directory)

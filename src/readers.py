@@ -30,7 +30,7 @@ class HMDB_Metabolite_Reader:
         return id[4:].lstrip('0')
 
     def output(self, id, name):
-        print(f'HMDB-{self.id_to_index(id)}, "{name}"')
+        print(f'HMDB-{self.id_to_index(id)},{name}')
 
     def run(self):
         file = pathlib.Path(self._directory, 'hmdb_metabolites.xml')
@@ -62,7 +62,7 @@ class HMDB_Metabolites_to_CSV(HMDB_Metabolite_Reader):
             super(HMDB_Metabolites_to_CSV, self).run()
 
     def output(self, id, name):
-        print(f'{id}, "{name}"', file=self.csv_file)
+        print(f'{id},{name}', file=self.csv_file)
 
 
 class HMDB_Reader:

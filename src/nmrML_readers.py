@@ -2,6 +2,7 @@ import pathlib
 import xml.etree.ElementTree as et
 import sqlite3
 from sqlite3 import Error
+import csv
 
 class HMDB_nmrML_Reader:
 
@@ -13,6 +14,7 @@ class HMDB_nmrML_Reader:
         sql_create_metabolites_table = """ CREATE TABLE IF NOT EXISTS metabolites (
                                                         metabolite_id integer PRIMARY KEY,
                                                         hmdb_id text NOT NULL,
+                                                        metabolite_name text,
                                                         frequency float,
                                                         reference text
                                                     );"""
@@ -51,8 +53,8 @@ class HMDB_nmrML_Reader:
             print(e)
 
     def metabolite_output(self, metabolite_data):
-        sql = ''' INSERT INTO metabolites(metabolite_id, hmdb_id, frequency, reference)
-                  VALUES(?,?,?,?) '''
+        sql = ''' INSERT INTO metabolites(metabolite_id, hmdb_id, metabolite_name, frequency, reference)
+                  VALUES(?,?,?,?,?) '''
         cur = self.conn.cursor()
         cur.execute(sql, metabolite_data)
         self.conn.commit()
@@ -73,6 +75,14 @@ class HMDB_nmrML_Reader:
         cur.execute(sql, peak_data)
         self.conn.commit()
         return cur.lastrowid
+
+    def get_name_from_csv(self, hmdb_id):
+        with open('/home/mh491/Metameta_Files/hmdb_nmr_spectra/id_name.csv', newline='') as csvfile:
+            csv_reader = csv.reader(csvfile, delimiter=',', quotechar='|')
+            for row in csv_reader:
+                if row[0] == hmdb_id:
+                    return row[1]
+            return None
 
     def run(self):
         directory = pathlib.Path(self._directory)
@@ -97,6 +107,7 @@ class HMDB_nmrML_Reader:
 
             metabolite_id = file.stem.split('_')[1]
             hmdb_id = file.stem.split('_')[0]
+            metabolite_name = self.get_name_from_csv(hmdb_id)
             root = tree.getroot()
             frequency = None
             reference = None
@@ -110,7 +121,7 @@ class HMDB_nmrML_Reader:
                     reference = next(root.iter('{http://nmrml.org/schema}chemicalShiftStandard')).get('name')
                 except:
                     reference = None
-            metabolite_data = (metabolite_id, hmdb_id, frequency, reference)
+            metabolite_data = (metabolite_id, hmdb_id, metabolite_name, frequency, reference)
             self.metabolite_output(metabolite_data)
             for i, multiplet in enumerate(root.iter('{http://nmrml.org/schema}multiplet')):
                 multiplet_id = f'{metabolite_id}.{i+1}'

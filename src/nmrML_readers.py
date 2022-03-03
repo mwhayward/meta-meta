@@ -87,7 +87,6 @@ class HMDB_nmrML_Reader:
     def run(self):
         directory = pathlib.Path(self._directory)
         database = f'{directory}/hmdb_nmrML_metabolites.db'
-        print(database)
         try:
             self.conn = sqlite3.connect(database)
         except Error as e:

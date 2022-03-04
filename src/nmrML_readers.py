@@ -110,29 +110,30 @@ class HMDB_nmrML_Reader:
             root = tree.getroot()
             frequency = None
             reference = None
-            if not (root.iter('{http://nmrml.org/schema}effectiveExcitationField') is None):
+            root_tag = root.tag.rstrip('nmrML')
+            if not (root.iter(f'{root_tag}effectiveExcitationField') is None):
                 try:
-                    frequency = next(root.iter('{http://nmrml.org/schema}effectiveExcitationField')).get('value')
+                    frequency = next(root.iter(f'{root_tag}effectiveExcitationField')).get('value')
                 except:
                     frequency = None
-            if not (root.iter('{http://nmrml.org/schema}chemicalShiftStandard')) is None:
+            if not (root.iter(f'{root_tag}chemicalShiftStandard')) is None:
                 try:
-                    reference = next(root.iter('{http://nmrml.org/schema}chemicalShiftStandard')).get('name')
+                    reference = next(root.iter(f'{root_tag}chemicalShiftStandard')).get('name')
                 except:
                     reference = None
             metabolite_data = (metabolite_id, hmdb_id, metabolite_name, frequency, reference)
             self.metabolite_output(metabolite_data)
-            for i, multiplet in enumerate(root.iter('{http://nmrml.org/schema}multiplet')):
+            for i, multiplet in enumerate(root.iter(f'{root_tag}multiplet')):
                 multiplet_id = f'{metabolite_id}.{i+1}'
                 center = multiplet.get('center')
-                atom_ref = multiplet.find('{http://nmrml.org/schema}atoms').get('atomRefs')
-                multiplicity = multiplet.find('{http://nmrml.org/schema}multiplicity').get('name')
+                atom_ref = multiplet.find(f'{root_tag}atoms').get('atomRefs')
+                multiplicity = multiplet.find(f'{root_tag}multiplicity').get('name')
                 multiplet_data = (multiplet_id, metabolite_id, center, atom_ref, multiplicity)
                 try:
                     self.multiplet_output(multiplet_data)
                 except:
                     print(f'error with multiplet {multiplet_id} in file {file.name}')
-                for j, peak in enumerate(multiplet.find('{http://nmrml.org/schema}peakList').findall('{http://nmrml.org/schema}peak')):
+                for j, peak in enumerate(multiplet.find(f'{root_tag}peakList').findall(f'{root_tag}peak')):
                     peak_id = f'{multiplet_id}.{j+1}'
                     shift = peak.get('center')
                     intensity = peak.get('amplitude')

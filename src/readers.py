@@ -324,7 +324,7 @@ class BMRB_to_CSV(BMRB_Reader):
 
     def output(self, file, molecule_id, spectrum_id, shifts, name):
         # shifts_text = self.shifts_as_list(shifts)
-        name = name.replace('_', ' ')
+        name = name.replace('_', '-').strip('\n')
         print(f'BMRB-{molecule_id}, {spectrum_id}, {self.shifts_as_list(shifts)}', file=self.id_shifts_csv_file)
         print(f'BMRB-{molecule_id}, "{name}"', file=self.id_name_csv_file)
 

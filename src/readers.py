@@ -263,14 +263,14 @@ class BMRB_Reader:
     def get_1h_shifts(self, tree):
         result = []
         SAVE_FRAME = 'save_spectral_peak_1H'
-        for top_frame in [top for top in tree if top.startswith(SAVE_FRAME)]:
+        for top_frame in [top for top in tree if top == SAVE_FRAME]:
             for loop in [elem for elem in tree[top_frame] if elem.startswith('loop')]:
                 for elem in tree[top_frame][loop][1:]:
                     for i, line in enumerate(elem):
                         for key in line.keys():
                             if key == 'Spectral_transition_char.Chem_shift_val':
                                 try:
-                                    result.append(float(line['Spectral_transition_char.Chem_shift_val']))
+                                    result.append(float(line[key]))
                                 except:
                                     print(f"   couldn\'t convert {line['Atom_chem_shift.Val']} to float")
         return result
@@ -302,7 +302,7 @@ class BMRB_Reader:
             molecule_id = self.id_to_index(tree.id)
 
             if len(shifts) == 0:
-                print(f"ignoring file {file} it doesn't contain any assigned 13c shifts")
+                print(f"ignoring file {file} it doesn't contain any assigned 1h shifts")
                 continue
 
             if self.has_1h(tree):

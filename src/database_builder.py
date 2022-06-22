@@ -1,4 +1,5 @@
 import pathlib
+import statistics
 import xml.etree.ElementTree as et
 import sys
 import os
@@ -204,7 +205,8 @@ class Reader:
 
     def create_connection(self):
         # Creates a single connection to the database
-        # This connection is used at the end of the script to export the tables to a db file
+        # This connection is used at the beginning of the script to collect accession numbers
+        # and at the end of the script to export the tables to a db file
         conn = None
         try:
             conn = sqlite3.connect(self.database)
@@ -213,6 +215,8 @@ class Reader:
         return conn
 
     def run(self):
+        # this method iterates through the accession numbers of meta data and attempts to gather chemical shift data
+        # nmrML files are first priority, followed by text files then xml
         sql = 'select "metabolite_id", "accession" from metabolites'
         metabolites = pd.read_sql(sql, self.conn)
         nmrmlfiles = os.listdir('/home/mh491/Database/HMDB_files/nmrML_experimental_Feb15_2022')
@@ -228,12 +232,14 @@ class Reader:
             text_metabolites = list(filter(text_expr.match, textfiles))
             xml_metabolites = list(filter(xml_expr.match, xmlfiles))
             if len(nmrml_metabolites) > 0:
-                pass
                 self.parsenmrml(nmrml_metabolites, metabolite_id)
             elif len(text_metabolites) > 0:
-                self.parsetext(text_metabolites)
-            '''elif len(xml_metabolites) > 0:
-                self.parsexml()'''
+                try:
+                    self.parsetext(text_metabolites, metabolite_id)
+                except:
+                    print(f'error with {text_metabolites}')
+            elif len(xml_metabolites) > 0:
+                self.parsexml(xml_metabolites)
     
     def parsenmrml(self, files, metabolite_id):
         directory = '/home/mh491/Database/HMDB_files/nmrML_experimental_Feb15_2022'
@@ -285,40 +291,53 @@ class Reader:
             except Exception as e:
                 print(f'Unable to parse file {file.name}')
 
-    def parsetext(self, files):
+    def parsetext(self, files, metabolite_id):
+        # takes a set of text file filenames, gathers chemical shift data and formats it to fit the SQL schema
         directory = '/home/mh491/Database/HMDB_files/hmdb_nmr_peak_lists/'
         for file in files:
             file = directory+file
-            try:
-                peaks = self.get_text_data(file, 'peaks')
-                if peaks is 'C13':
-                    pass
-                elif peaks is None:
-                    print(f'no peak table in {file}')
-                elif peaks.empty:
-                    print(f'empty peak table in file: {file}')
-            except:
-                print(f'error in peaks for file: {file}')
-            try:
-                multiplets = self.get_text_data(file, 'multiplets')
-                if multiplets is 'C13':
-                    pass
-                elif multiplets is None:
-                    print(f'no multiplet table in {file}')
-                elif multiplets.empty:
-                    print(f'empty multiplet table in file: {file}')
-            except:
-                print(f'error in multiplets for file: {file}')
+            locations = self.find_tables(file)
+            multiplets = self.get_text_data(file, 'multiplets', locations)
+            peaks = self.get_text_data(file, 'peaks', locations)
+            if multiplets is not None:
+                for index, multiplet in multiplets.iterrows():
+                    multiplet_id = f'{metabolite_id}.{index+1}'
+                    center = multiplet[1]
+                    atom_ref = multiplet[5]
+                    multiplicity = multiplet[3]
+                    titles = ['multiplet_id', 'metabolite_id', 'center', 'atom_ref', 'multiplicity']
+                    multiplet_data = pd.DataFrame([[multiplet_id, metabolite_id, center, atom_ref, multiplicity]], columns=titles)
+                    if self.multiplets is None:
+                        self.multiplets = multiplet_data
+                    else:
+                        self.multiplets = self.multiplets.append(multiplet_data)
+                    ppmrange = [float(num) for num in multiplet[-1].split(' .. ')]
+                    for index, peak in peaks.iterrows():
+                        if min(ppmrange) < float(peak[1]) < max(ppmrange):
+                            peak_id = f'{multiplet_id}.{index + 1}'
+                            shift = peak[1]
+                            intensity = peak[-1]
+                            width = None
+                            titles = ['peak_id', 'metabolite_id', 'multiplet_id', 'shift', 'intensity', 'width']
+                            peak_data = pd.DataFrame([[peak_id, metabolite_id, multiplet_id, shift, intensity, width]], columns=titles)
+                            if self.peaks is None:
+                                self.peaks = peak_data
+                            else:
+                                self.peaks = self.peaks.append(peak_data)
 
-    def parsexml(self):
-        pass
+    def parsexml(self, files):
+        for file in files:
+            pass
+            #print(f'only xml available for {file}')
 
-    def get_text_data(self, file, feature):
-        locations = self.find_tables(file)
+    def get_text_data(self, file, feature, locations):
+        # gathers either peak or multiplet data from text files
+        # returns a pandas dataframe identical to the one from the text file
         if locations is 'C13':
-            return 'C13'
+            return None
         startline = locations[feature]
         if startline == -1:
+            print(f'no {feature} table in {file}')
             return None
         file = open(file, 'r')
         titles = []
@@ -329,7 +348,7 @@ class Reader:
             if i == startline:
                 start = True
             if line != '\n':
-                line=line.rstrip('\n')
+                line = line.rstrip('\n')
             if line.startswith('No') and start is True:
                 titles = line.split('\t')
                 while '' in titles:
@@ -342,9 +361,14 @@ class Reader:
             elif start is True and bool(table) is not False:
                 break
         df = pd.DataFrame(table, columns=titles)
+        if df.empty:
+            print(f'empty multiplet table in file: {file}')
+            return None
         return df
 
     def find_tables(self, file):
+        # finds the line where the peak and multiplet tables start in the text file
+        # returns a dictionary on success or a string on fail
         locations = {}
         file = open(file, 'r')
         for i, line in enumerate(file.readlines()):

@@ -228,10 +228,11 @@ class Reader:
             text_metabolites = list(filter(text_expr.match, textfiles))
             xml_metabolites = list(filter(xml_expr.match, xmlfiles))
             if len(nmrml_metabolites) > 0:
+                pass
                 self.parsenmrml(nmrml_metabolites, metabolite_id)
-            '''elif len(text_metabolites) > 0:
-                self.parsetext()
-            elif len(xml_metabolites) > 0:
+            elif len(text_metabolites) > 0:
+                self.parsetext(text_metabolites)
+            '''elif len(xml_metabolites) > 0:
                 self.parsexml()'''
     
     def parsenmrml(self, files, metabolite_id):
@@ -284,11 +285,72 @@ class Reader:
             except Exception as e:
                 print(f'Unable to parse file {file.name}')
 
-    def parsetext(self):
-        pass
+    def parsetext(self, files):
+        directory = '/home/mh491/Database/HMDB_files/hmdb_nmr_peak_lists/'
+        for file in files:
+            file = directory+file
+            try:
+                peaks = self.get_text_data(file, 'peaks')
+                if peaks.empty:
+                    print(f'empty peak table in file: {file}')
+            except:
+                print(f'error in peaks for file: {file}')
+            try:
+                multiplets = self.get_text_data(file, 'multiplets')
+                if multiplets.empty:
+                    print(f'empty multiplet table in file: {file}')
+            except:
+                print(f'error in multiplets for file: {file}')
 
     def parsexml(self):
         pass
+
+    def get_text_data(self, file, feature):
+        locations = self.find_tables(file)
+        if locations is None:
+            return pd.DataFrame([[1,1,1]])
+        startline = locations[feature]
+        if startline == -1:
+            return pd.DataFrame([[1,1,1]])
+        file = open(file, 'r')
+        titles = []
+        table = []
+        start = False
+        for i, line in enumerate(file.readlines()):
+            line = line.lstrip(' ')
+            if i == startline:
+                start = True
+            if line != '\n':
+                line=line.rstrip('\n')
+            if line.startswith('No') and start is True:
+                titles = line.split('\t')
+                while '' in titles:
+                    titles.remove('')
+            elif line[0].isdigit() and start is True:
+                row = line.split('\t')
+                while '' in row:
+                    row.remove('')
+                table.append(row)
+            elif start is True and bool(table) is not False:
+                break
+        df = pd.DataFrame(table, columns=titles)
+        return df
+
+    def find_tables(self, file):
+        locations = {}
+        file = open(file, 'r')
+        for i, line in enumerate(file.readlines()):
+            if line.startswith('DUoptxwinnmr'):
+                return None
+            if 'peaks' in line.casefold():
+                locations['peaks'] = i
+            if 'multiplets' in line.casefold():
+                locations['multiplets'] = i
+        if 'peaks' not in locations:
+            locations['peaks'] = 0
+        if 'multiplets' not in locations:
+            locations['multiplets'] = -1
+        return locations
 
 
 if __name__ == "__main__":

@@ -301,22 +301,28 @@ class Reader:
             peaks = self.get_text_data(file, 'peaks', locations)
             if multiplets is not None:
                 for index, multiplet in multiplets.iterrows():
+                    ppmrange = [float(num) for num in multiplet['(ppm)'].split(' .. ')]
                     multiplet_id = f'{metabolite_id}.{index+1}'
-                    center = multiplet[1]
-                    atom_ref = multiplet[5]
-                    multiplicity = multiplet[3]
+                    if 'Shift1(ppm)' in multiplets.columns:
+                        center = multiplet['Shift1(ppm)']
+                    else:
+                        center = statistics.mean(ppmrange)
+                    if 'Atom1' in multiplets.columns:
+                        atom_ref = multiplet['Atom1']
+                    else:
+                        atom_ref = None
+                    multiplicity = multiplet['Type']
                     titles = ['multiplet_id', 'metabolite_id', 'center', 'atom_ref', 'multiplicity']
                     multiplet_data = pd.DataFrame([[multiplet_id, metabolite_id, center, atom_ref, multiplicity]], columns=titles)
                     if self.multiplets is None:
                         self.multiplets = multiplet_data
                     else:
                         self.multiplets = self.multiplets.append(multiplet_data)
-                    ppmrange = [float(num) for num in multiplet[-1].split(' .. ')]
                     for index, peak in peaks.iterrows():
                         if min(ppmrange) < float(peak[1]) < max(ppmrange):
                             peak_id = f'{multiplet_id}.{index + 1}'
-                            shift = peak[1]
-                            intensity = peak[-1]
+                            shift = peak['(ppm)']
+                            intensity = peak['Height']
                             width = None
                             titles = ['peak_id', 'metabolite_id', 'multiplet_id', 'shift', 'intensity', 'width']
                             peak_data = pd.DataFrame([[peak_id, metabolite_id, multiplet_id, shift, intensity, width]], columns=titles)
@@ -350,7 +356,8 @@ class Reader:
             if line != '\n':
                 line = line.rstrip('\n')
             if line.startswith('No') and start is True:
-                titles = line.split('\t')
+                for value in line.split('\t'):
+                    titles.append(value.replace(' ', ''))
                 while '' in titles:
                     titles.remove('')
             elif line[0].isdigit() and start is True:

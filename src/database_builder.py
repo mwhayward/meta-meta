@@ -291,13 +291,21 @@ class Reader:
             file = directory+file
             try:
                 peaks = self.get_text_data(file, 'peaks')
-                if peaks.empty:
+                if peaks is 'C13':
+                    pass
+                elif peaks is None:
+                    print(f'no peak table in {file}')
+                elif peaks.empty:
                     print(f'empty peak table in file: {file}')
             except:
                 print(f'error in peaks for file: {file}')
             try:
                 multiplets = self.get_text_data(file, 'multiplets')
-                if multiplets.empty:
+                if multiplets is 'C13':
+                    pass
+                elif multiplets is None:
+                    print(f'no multiplet table in {file}')
+                elif multiplets.empty:
                     print(f'empty multiplet table in file: {file}')
             except:
                 print(f'error in multiplets for file: {file}')
@@ -307,11 +315,11 @@ class Reader:
 
     def get_text_data(self, file, feature):
         locations = self.find_tables(file)
-        if locations is None:
-            return pd.DataFrame([[1,1,1]])
+        if locations is 'C13':
+            return 'C13'
         startline = locations[feature]
         if startline == -1:
-            return pd.DataFrame([[1,1,1]])
+            return None
         file = open(file, 'r')
         titles = []
         table = []
@@ -341,7 +349,7 @@ class Reader:
         file = open(file, 'r')
         for i, line in enumerate(file.readlines()):
             if line.startswith('DUoptxwinnmr'):
-                return None
+                return 'C13'
             if 'peaks' in line.casefold():
                 locations['peaks'] = i
             if 'multiplets' in line.casefold():

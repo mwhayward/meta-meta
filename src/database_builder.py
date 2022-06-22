@@ -239,7 +239,7 @@ class Reader:
                 except:
                     print(f'error with {text_metabolites}')
             elif len(xml_metabolites) > 0:
-                self.parsexml(xml_metabolites)
+                self.parsexml(xml_metabolites, metabolite_id)
     
     def parsenmrml(self, files, metabolite_id):
         directory = '/home/mh491/Database/HMDB_files/nmrML_experimental_Feb15_2022'
@@ -331,10 +331,45 @@ class Reader:
                             else:
                                 self.peaks = self.peaks.append(peak_data)
 
-    def parsexml(self, files):
+    def parsexml(self, files, metabolite_id):
+        # method for parsing xml files from hmdb
+        # by default, xml files do not have multiplet data so this method skips multiplets
+        directory = '/home/mh491/Database/HMDB_files/xml_files'
         for file in files:
-            pass
-            #print(f'only xml available for {file}')
+            file = pathlib.Path(directory, file)
+            tree = et.parse(file)
+            root = tree.getroot()
+            frequency = self.get_element(root, 'frequency')[0]
+            reference = self.get_element(root, 'chemical-shift-reference')[0]
+            ph = self.get_element(root, 'sample-ph')[0]
+            concentration = self.get_element(root, 'sample-concentration')[0]
+            concentration_units = self.get_element(root, 'sample-concentration-units')[0]
+            temperature = self.get_element(root, 'sample-temperature')[0]
+            temperature_units = self.get_element(root, 'sample-temperature-units')[0]
+            titles = ['metabolite_id', 'frequency', 'reference', 'ph', 'concentration', 'concentration_units', 'temperature', 'temperature_units']
+            spectrum_data = pd.DataFrame([[metabolite_id, frequency, reference, ph, concentration, concentration_units, temperature, temperature_units]], columns=titles)
+            if self.spectra is None:
+                self.spectra = spectrum_data
+            else:
+                self.spectra = self.spectra.append(spectrum_data)
+            for i, peak in enumerate(root.iter('nmr-one-d-peak')):
+                peak_id = f'{metabolite_id}.1.{i}'
+                shift = peak.find('chemical-shift').text
+                intensity = peak.find('intensity').text
+                width = None
+                multiplet_id = None
+                titles = ['peak_id', 'metabolite_id', 'multiplet_id', 'shift', 'intensity', 'width']
+                peak_data = pd.DataFrame([[peak_id, metabolite_id, multiplet_id, shift, intensity, width]], columns=titles)
+                if self.peaks is None:
+                    self.peaks = peak_data
+                else:
+                    self.peaks = self.peaks.append(peak_data)
+
+    def get_element(self, root, tag):
+        out = []
+        for elem in root.iter(tag):
+            out.append(elem.text)
+        return out
 
     def get_text_data(self, file, feature, locations):
         # gathers either peak or multiplet data from text files

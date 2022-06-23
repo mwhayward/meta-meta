@@ -239,13 +239,17 @@ class Reader:
                 except:
                     print(f'error with {text_metabolites}')
             elif len(xml_metabolites) > 0:
+                #try:
                 self.parsexml(xml_metabolites, metabolite_id)
+                #except:
+                #    print(f'error with {xml_metabolites}')
+
     
     def parsenmrml(self, files, metabolite_id):
-        directory = '/home/mh491/Database/HMDB_files/nmrML_experimental_Feb15_2022'
-        for file in files:
-            file = pathlib.Path(directory, file)
-            if not file.parts[-1].endswith('.nmrML') or not '1H' in file.parts[-1]:
+        directory = '/home/mh491/Database/HMDB_files/nmrML_experimental_Feb15_2022/'
+        for i, file in enumerate(files):
+            file = directory+file
+            if not file.endswith('.nmrML') or not '1H' in file:
                 continue
             try:
                 tree = et.parse(file)
@@ -259,31 +263,32 @@ class Reader:
                     reference = next(root.iter(f'{root_tag}chemicalShiftStandard')).get('name')
                 except:
                     reference = None
-                ph = None
-                titles = ['metabolite_id', 'frequency', 'reference', 'ph']
-                spectrum_data = pd.DataFrame([[metabolite_id, frequency, reference, ph]], columns=titles)
+                ph = concentration = concentration_units = temperature = temperature_units = None
+                spectrum_id = f'{metabolite_id}.{i}'
+                spectrum_data = [spectrum_id, metabolite_id, frequency, reference, ph, concentration, concentration_units, temperature, temperature_units]
+                self.get_xml_spectrum_data(file, metabolite_id, spectrum_id, spectrum_data)
                 if self.spectra is None:
                     self.spectra = spectrum_data
                 else:
                     self.spectra = self.spectra.append(spectrum_data)
-                for i, multiplet in enumerate(root.iter(f'{root_tag}multiplet')):
-                    multiplet_id = f'{metabolite_id}.{i + 1}'
+                for j, multiplet in enumerate(root.iter(f'{root_tag}multiplet')):
+                    multiplet_id = f'{spectrum_id}.{j + 1}'
                     center = multiplet.get('center')
                     atom_ref = multiplet.find(f'{root_tag}atoms').get('atomRefs')
                     multiplicity = multiplet.find(f'{root_tag}multiplicity').get('name')
-                    titles = ['multiplet_id', 'metabolite_id', 'center', 'atom_ref', 'multiplicity']
-                    multiplet_data = pd.DataFrame([[multiplet_id, metabolite_id, center, atom_ref, multiplicity]], columns=titles)
+                    titles = ['multiplet_id', 'spectrum_id', 'center', 'atom_ref', 'multiplicity']
+                    multiplet_data = pd.DataFrame([[multiplet_id, spectrum_id, center, atom_ref, multiplicity]], columns=titles)
                     if self.multiplets is None:
                         self.multiplets = multiplet_data
                     else:
                         self.multiplets = self.multiplets.append(multiplet_data)
-                    for j, peak in enumerate(multiplet.find(f'{root_tag}peakList').findall(f'{root_tag}peak')):
-                        peak_id = f'{multiplet_id}.{j + 1}'
+                    for k, peak in enumerate(multiplet.find(f'{root_tag}peakList').findall(f'{root_tag}peak')):
+                        peak_id = f'{multiplet_id}.{k + 1}'
                         shift = peak.get('center')
                         intensity = peak.get('amplitude')
                         width = peak.get('width')
-                        titles = ['peak_id', 'metabolite_id', 'multiplet_id', 'shift', 'intensity', 'width']
-                        peak_data = pd.DataFrame([[peak_id, metabolite_id, multiplet_id, shift, intensity, width]], columns=titles)
+                        titles = ['peak_id', 'spectrum_id', 'multiplet_id', 'shift', 'intensity', 'width']
+                        peak_data = pd.DataFrame([[peak_id, spectrum_id, multiplet_id, shift, intensity, width]], columns=titles)
                         if self.peaks is None:
                             self.peaks = peak_data
                         else:
@@ -294,7 +299,10 @@ class Reader:
     def parsetext(self, files, metabolite_id):
         # takes a set of text file filenames, gathers chemical shift data and formats it to fit the SQL schema
         directory = '/home/mh491/Database/HMDB_files/hmdb_nmr_peak_lists/'
-        for file in files:
+        for i, file in enumerate(files):
+            spectrum_id = f'{metabolite_id}.{i}'
+            original_data = [spectrum_id, metabolite_id, None, None, None, None, None, None, None]
+            self.get_xml_spectrum_data(file, metabolite_id, spectrum_id, original_data)
             file = directory+file
             locations = self.find_tables(file)
             multiplets = self.get_text_data(file, 'multiplets', locations)
@@ -334,26 +342,11 @@ class Reader:
     def parsexml(self, files, metabolite_id):
         # method for parsing xml files from hmdb
         # by default, xml files do not have multiplet data so this method skips multiplets
-        directory = '/home/mh491/Database/HMDB_files/xml_files'
-        for file in files:
-            file = pathlib.Path(directory, file)
-            tree = et.parse(file)
-            root = tree.getroot()
-            frequency = self.get_element(root, 'frequency')[0]
-            reference = self.get_element(root, 'chemical-shift-reference')[0]
-            ph = self.get_element(root, 'sample-ph')[0]
-            concentration = self.get_element(root, 'sample-concentration')[0]
-            concentration_units = self.get_element(root, 'sample-concentration-units')[0]
-            temperature = self.get_element(root, 'sample-temperature')[0]
-            temperature_units = self.get_element(root, 'sample-temperature-units')[0]
-            titles = ['metabolite_id', 'frequency', 'reference', 'ph', 'concentration', 'concentration_units', 'temperature', 'temperature_units']
-            spectrum_data = pd.DataFrame([[metabolite_id, frequency, reference, ph, concentration, concentration_units, temperature, temperature_units]], columns=titles)
-            if self.spectra is None:
-                self.spectra = spectrum_data
-            else:
-                self.spectra = self.spectra.append(spectrum_data)
-            for i, peak in enumerate(root.iter('nmr-one-d-peak')):
-                peak_id = f'{metabolite_id}.1.{i}'
+        for i, file in enumerate(files):
+            spectrum_id = f'{metabolite_id}.{i}'
+            root = self.get_xml_spectrum_data(file, metabolite_id, spectrum_id)
+            for j, peak in enumerate(root.iter('nmr-one-d-peak')):
+                peak_id = f'{metabolite_id}.1.{j}'
                 shift = peak.find('chemical-shift').text
                 intensity = peak.find('intensity').text
                 width = None
@@ -365,11 +358,65 @@ class Reader:
                 else:
                     self.peaks = self.peaks.append(peak_data)
 
+    def get_xml_spectrum_data(self, file, metabolite_id, spectrum_id, original_data=None):
+        if file.endswith('.xml'):
+            specnum = None
+        if file.endswith('.nmrML'):
+            specnum = file.split('_')[1]
+        elif file.endswith('.txt'):
+            specnum = file.split('_')[2]
+        directory = '/home/mh491/Database/HMDB_files/xml_files'
+        titles = ['spectrum_id', 'metabolite_id', 'frequency', 'reference', 'ph', 'concentration',
+                  'concentration_units', 'temperature', 'temperature_units']
+        fullfile = pathlib.Path(directory, file)
+        if specnum is not None:
+            xmlfiles = os.listdir('/home/mh491/Database/HMDB_files/xml_files')
+            filetargets = [f for f in xmlfiles if f'one_d_spectrum_{specnum}' in f]
+            if len(filetargets) > 0:
+                fullfile = pathlib.Path(directory, filetargets[0])
+            else:
+                #print(f'no xml file to complement {file}')
+                spectrum_data = pd.DataFrame([original_data], columns=titles)
+                self.add_spectrum_data(spectrum_data)
+                return None
+        tree = et.parse(fullfile)
+        root = tree.getroot()
+        frequency = self.get_element(root, 'frequency')[0]
+        reference = self.get_element(root, 'chemical-shift-reference')[0]
+        ph = self.get_element(root, 'sample-ph')[0]
+        concentration = self.get_element(root, 'sample-concentration')[0]
+        concentration_units = self.get_element(root, 'sample-concentration-units')[0]
+        temperature = self.get_element(root, 'sample-temperature')[0]
+        temperature_units = self.get_element(root, 'sample-temperature-units')[0]
+        xml_data = [spectrum_id, metabolite_id, frequency, reference, ph, concentration, concentration_units, temperature, temperature_units]
+        if original_data is not None:
+            new_data = self.overwrite(original_data, xml_data)
+            spectrum_data = pd.DataFrame([new_data], columns=titles)
+        else:
+            spectrum_data = pd.DataFrame([xml_data])
+        self.add_spectrum_data(spectrum_data)
+        return root
+
+    def add_spectrum_data(self, spectrum_data):
+        if self.spectra is None:
+            self.spectra = spectrum_data
+        else:
+            self.spectra = self.spectra.append(spectrum_data)
+
     def get_element(self, root, tag):
         out = []
         for elem in root.iter(tag):
             out.append(elem.text)
+        if len(out) == 0:
+            out = [None]
         return out
+    # todo add a method for collecting spectrum metadata from xml files when not possible from nmrml and text files
+
+    def overwrite(self, list1, list2):
+        for i, value in enumerate(list1):
+            if value is None:
+                list1[i] = list2[i]
+        return list1
 
     def get_text_data(self, file, feature, locations):
         # gathers either peak or multiplet data from text files

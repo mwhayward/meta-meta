@@ -317,8 +317,8 @@ class Reader:
                     else:
                         atom_ref = None
                     multiplicity = multiplet['Type']
-                    titles = ['multiplet_id', 'metabolite_id', 'center', 'atom_ref', 'multiplicity']
-                    multiplet_data = pd.DataFrame([[multiplet_id, metabolite_id, center, atom_ref, multiplicity]], columns=titles)
+                    titles = ['multiplet_id', 'spectrum_id', 'center', 'atom_ref', 'multiplicity']
+                    multiplet_data = pd.DataFrame([[multiplet_id, spectrum_id, center, atom_ref, multiplicity]], columns=titles)
                     if self.multiplets is None:
                         self.multiplets = multiplet_data
                     else:
@@ -329,8 +329,8 @@ class Reader:
                             shift = peak['(ppm)']
                             intensity = peak['Height']
                             width = None
-                            titles = ['peak_id', 'metabolite_id', 'multiplet_id', 'shift', 'intensity', 'width']
-                            peak_data = pd.DataFrame([[peak_id, metabolite_id, multiplet_id, shift, intensity, width]], columns=titles)
+                            titles = ['peak_id', 'spectrum_id', 'multiplet_id', 'shift', 'intensity', 'width']
+                            peak_data = pd.DataFrame([[peak_id, spectrum_id, multiplet_id, shift, intensity, width]], columns=titles)
                             if self.peaks is None:
                                 self.peaks = peak_data
                             else:
@@ -348,8 +348,8 @@ class Reader:
                 intensity = peak.find('intensity').text
                 width = None
                 multiplet_id = None
-                titles = ['peak_id', 'metabolite_id', 'multiplet_id', 'shift', 'intensity', 'width']
-                peak_data = pd.DataFrame([[peak_id, metabolite_id, multiplet_id, shift, intensity, width]], columns=titles)
+                titles = ['peak_id', 'spectrum_id', 'multiplet_id', 'shift', 'intensity', 'width']
+                peak_data = pd.DataFrame([[peak_id, spectrum_id, multiplet_id, shift, intensity, width]], columns=titles)
                 if self.peaks is None:
                     self.peaks = peak_data
                 else:

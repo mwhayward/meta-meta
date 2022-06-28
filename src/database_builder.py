@@ -266,12 +266,8 @@ class Reader:
                     reference = None
                 ph = concentration = concentration_units = temperature = temperature_units = None
                 spectrum_id = f'{metabolite_id}.{i+1}'
-                spectrum_data = [spectrum_id, metabolite_id, frequency, reference, ph, concentration, concentration_units, temperature, temperature_units]
-                self.get_xml_spectrum_data(file, metabolite_id, spectrum_id, spectrum_data)
-                if self.spectra is None:
-                    self.spectra = spectrum_data
-                else:
-                    self.spectra = self.spectra.append(spectrum_data)
+                original_data = [spectrum_id, metabolite_id, frequency, reference, ph, concentration, concentration_units, temperature, temperature_units]
+                self.get_xml_spectrum_data(file, metabolite_id, spectrum_id, original_data)
                 for j, multiplet in enumerate(root.iter(f'{root_tag}multiplet')):
                     multiplet_id = f'{spectrum_id}.{j + 1}'
                     center = multiplet.get('center')
@@ -396,7 +392,7 @@ class Reader:
             new_data = self.overwrite(original_data, xml_data)
             spectrum_data = pd.DataFrame([new_data], columns=titles)
         else:
-            spectrum_data = pd.DataFrame([xml_data])
+            spectrum_data = pd.DataFrame([xml_data], columns=titles)
         self.add_spectrum_data(spectrum_data)
         return root
 

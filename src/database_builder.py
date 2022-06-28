@@ -361,9 +361,9 @@ class Reader:
         if file.endswith('.xml'):
             specnum = None
         if file.endswith('.nmrML'):
-            specnum = file.split('_')[1]
+            specnum = file.split('_')[-2]
         elif file.endswith('.txt'):
-            specnum = file.split('_')[2]
+            specnum = file.split('_')[-2]
         directory = '/home/mh491/Database/HMDB_files/xml_files'
         titles = ['spectrum_id', 'metabolite_id', 'frequency', 'reference', 'ph', 'concentration',
                   'concentration_units', 'temperature', 'temperature_units']

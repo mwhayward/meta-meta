@@ -31,8 +31,7 @@ class Builder:
         self.synonyms = None
         self.isin = None
         self.ontology = None
-        self.normal_concentrations = None
-        self.abnormal_concentrations = None
+        self.concentrations = None
 
     def create_connection(self):
         # Creates a single connection to the database
@@ -74,19 +73,11 @@ class Builder:
             if elem.find('{http://www.hmdb.ca}normal_concentrations') is not None:
                 concelem = elem.find('{http://www.hmdb.ca}normal_concentrations')
                 for concentration in concelem.getchildren():
-                    normconcs = self.get_concentrations(concentration, count)
-                    if self.normal_concentrations is None:
-                        self.normal_concentrations = normconcs
-                    else:
-                        self.normal_concentrations = self.normal_concentrations.append(normconcs)
+                    self.get_concentrations(concentration, count)
             if elem.find('{http://www.hmdb.ca}abnormal_concentrations') is not None:
                 concelem = elem.find('{http://www.hmdb.ca}abnormal_concentrations')
                 for concentration in concelem.getchildren():
-                    abnormconcs = self.get_concentrations(concentration, count)
-                    if self.abnormal_concentrations is None:
-                        self.abnormal_concentrations = abnormconcs
-                    else:
-                        self.abnormal_concentrations = self.abnormal_concentrations.append(abnormconcs)
+                    self.get_concentrations(concentration, count)
 
             # Updates the id number and prints a report to the console
             print(f'parsed {count} metabolites out of 1430')
@@ -165,7 +156,10 @@ class Builder:
                 titles.append(child.tag.split('}', 1)[1])
                 data.append(child.text)
         concs = pd.DataFrame([data], columns=titles)
-        return concs
+        if self.concentrations is None:
+            self.concentrations = concs
+        else:
+            self.concentrations = self.concentrations.append(concs)
 
     def save_to_db(self):
         # Saves all dataframes to the db file
@@ -174,8 +168,7 @@ class Builder:
         self.synonyms.to_sql('synonyms', self.conn, if_exists='replace', index=False)
         self.isin.to_sql('isin', self.conn, if_exists='replace', index=False)
         self.ontology.to_sql('ontology', self.conn, if_exists='replace', index=False)
-        self.normal_concentrations.to_sql('normal_concentrations', self.conn, if_exists='replace', index=False)
-        self.abnormal_concentrations.to_sql('abnormal_concentrations', self.conn, if_exists='replace', index=False)
+        self.concentrations.to_sql('normal_concentrations', self.conn, if_exists='replace', index=False)
         
 
 def parse_metabolites(builder):

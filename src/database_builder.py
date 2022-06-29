@@ -50,15 +50,16 @@ class Builder:
         if elem.find('{http://www.hmdb.ca}accession').text in self.names.index:
 
             # Gather the bottom level metadata for the metabolite
+            metabolite_id = f'SU:{count}'
             titles = self.metabolite_titles(elem)
-            data = self.metabolite_data(count, elem)
-            data = pd.DataFrame([data], columns=titles, index=[count])
+            data = self.metabolite_data(metabolite_id, elem)
+            data = pd.DataFrame([data], columns=titles, index=[metabolite_id])
             self.insert_into_table(data)
 
             # Gather the synonyms for this metabolite
             synonyms = self.get_synonyms(elem)
             for syn in synonyms:
-                data = pd.DataFrame([[count, syn]], columns=['metabolite_id', 'synonyms'])
+                data = pd.DataFrame([[metabolite_id, syn]], columns=['metabolite_id', 'synonyms'])
                 if self.synonyms is None:
                     self.synonyms = data
                 else:
@@ -67,17 +68,17 @@ class Builder:
             # Gather ontology data for this metabolite
             ont = elem.find('{http://www.hmdb.ca}ontology')
             tag = '{http://www.hmdb.ca}term'
-            self.retrieve_all(count, ont, tag)
+            self.retrieve_all(metabolite_id, ont, tag)
 
             # Gather concentration data for this metabolite
             if elem.find('{http://www.hmdb.ca}normal_concentrations') is not None:
                 concelem = elem.find('{http://www.hmdb.ca}normal_concentrations')
                 for concentration in concelem.getchildren():
-                    self.get_concentrations(concentration, count)
+                    self.get_concentrations(concentration, metabolite_id)
             if elem.find('{http://www.hmdb.ca}abnormal_concentrations') is not None:
                 concelem = elem.find('{http://www.hmdb.ca}abnormal_concentrations')
                 for concentration in concelem.getchildren():
-                    self.get_concentrations(concentration, count)
+                    self.get_concentrations(concentration, metabolite_id)
 
             # Updates the id number and prints a report to the console
             print(f'parsed {count} metabolites out of 1430')
@@ -98,10 +99,10 @@ class Builder:
             titles.append(f'{parent}_id')
         return titles
 
-    def metabolite_data(self, id, elem):
+    def metabolite_data(self, metabolite_id, elem):
         # A method for gathering values for a table from a given etree element
         # Used for the bottom level metabolite metadata
-        data = [f'SU:{id}']
+        data = [metabolite_id]
         for child in elem.getchildren():
             if len(child.getchildren()) == 0 and child.tag not in self.exceptions:
                 data.append(child.text)
@@ -145,12 +146,12 @@ class Builder:
             elif elem.text not in self.ontology.index:
                 self.ontology = self.ontology.append(data)
 
-    def get_concentrations(self, concelem, count):
+    def get_concentrations(self, concelem, metabolite_id):
         # A method for gathering concentration data
         # Used for both normal and abnormal concentration data
         # Does not add values to the concentration dataframe but returns a dataframe
         titles = ['metabolite_id']
-        data = [count]
+        data = [metabolite_id]
         for child in concelem.getchildren():
             if len(child.getchildren()) == 0:
                 titles.append(child.tag.split('}', 1)[1])

@@ -169,7 +169,7 @@ class Builder:
         self.synonyms.to_sql('synonyms', self.conn, if_exists='replace', index=False)
         self.isin.to_sql('isin', self.conn, if_exists='replace', index=False)
         self.ontology.to_sql('ontology', self.conn, if_exists='replace', index=False)
-        self.concentrations.to_sql('normal_concentrations', self.conn, if_exists='replace', index=False)
+        self.concentrations.to_sql('concentrations', self.conn, if_exists='replace', index=False)
 
     def parse_metabolites(self):
         # A method that parses through the single xml file and builds element trees for each metabolite

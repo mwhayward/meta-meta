@@ -89,7 +89,7 @@ class Builder:
         # Used for the bottom level metabolite metadata
         name = elem.tag.split('}', 1)[1]
         titles = ['metabolite_id']
-        #titles = [f'{name}_id']
+        # titles = [f'{name}_id']
         for child in elem.getchildren():
             if len(child.getchildren()) == 0 and child.tag not in self.exceptions:
                 name = child.tag.split('}', 1)[1]
@@ -101,7 +101,7 @@ class Builder:
     def metabolite_data(self, id, elem):
         # A method for gathering values for a table from a given etree element
         # Used for the bottom level metabolite metadata
-        data = [id]
+        data = [f'SU:{id}']
         for child in elem.getchildren():
             if len(child.getchildren()) == 0 and child.tag not in self.exceptions:
                 data.append(child.text)
@@ -113,7 +113,7 @@ class Builder:
             self.metabolites = data
         else:
             self.metabolites = self.metabolites.append(data)
-            
+
     def get_synonyms(self, elem):
         # A method for gathering synonym data from a synonym element
         syn = elem.find('{http://www.hmdb.ca}synonyms')
@@ -144,7 +144,7 @@ class Builder:
                 self.ontology = data
             elif elem.text not in self.ontology.index:
                 self.ontology = self.ontology.append(data)
-    
+
     def get_concentrations(self, concelem, count):
         # A method for gathering concentration data
         # Used for both normal and abnormal concentration data
@@ -169,7 +169,6 @@ class Builder:
         self.isin.to_sql('isin', self.conn, if_exists='replace', index=False)
         self.ontology.to_sql('ontology', self.conn, if_exists='replace', index=False)
         self.concentrations.to_sql('normal_concentrations', self.conn, if_exists='replace', index=False)
-        
 
     def parse_metabolites(self):
         # A method that parses through the single xml file and builds element trees for each metabolite
@@ -187,23 +186,27 @@ class Builder:
                 if count >= 1430:
                     break
 
+
 class Reader:
     def __init__(self, directory):
         self.directory = Path(directory)
         self.conn = self.create_connection()
 
-        self.samples = None
-        self.sampletitles = []
+        self.sampletitles = ['sample_id', 'metabolite_id', 'pH', 'amount', 'amount_unit', 'reference']
+        self.samples = pd.DataFrame(columns=self.sampletitles)
+        self.sample_key = 1
 
-        self.spectra = None
-        self.spectratitles = ['spectrum_id', 'metabolite_id', 'frequency', 'reference', 'ph', 'concentration',
-                  'concentration_units', 'temperature', 'temperature_units']
+        self.spectratitles = ['spectrum_id', 'sample_id', 'frequency', 'temperature', 'temperature_units']
+        self.spectra = pd.DataFrame(columns=self.spectratitles)
+        self.spectrum_key = 1
 
-        self.multiplets = None
         self.multiplettitles = ['multiplet_id', 'spectrum_id', 'center', 'atom_ref', 'multiplicity']
+        self.multiplets = pd.DataFrame(columns=self.multiplettitles)
+        self.multiplet_key = 1
 
-        self.peaks = None
         self.peaktitles = ['peak_id', 'spectrum_id', 'multiplet_id', 'shift', 'intensity', 'width']
+        self.peaks = pd.DataFrame(columns=self.peaktitles)
+        self.peak_key = 1
 
     def create_connection(self):
         # Creates a single connection to the database
@@ -247,95 +250,92 @@ class Reader:
                     print(f'error with {xml_metabolites}')
             self.save_to_db()
 
-    
     def parsenmrml(self, files, metabolite_id):
+        # method for gathering sample/spectrum/multiplet/peak data from nmrML files
+        # calls xml files to cover the shortcomings of nmrML with sample/spectrum data
         directory = self.directory.joinpath('HMDB_files/nmrML_experimental_Feb15_2022')
         for i, file in enumerate(files):
+            sample_id = f'SA:{self.sample_key}'
+            sample_data = {'sample_id': sample_id,
+                           'metabolite_id': metabolite_id}
+            spectrum_id = f'SP:{self.spectrum_key}'
+            spectrum_data = {'spectrum_id': spectrum_id,
+                             'sample_id': sample_id}
             file = directory.joinpath(file)
             if not str(file).endswith('.nmrML') or not '1H' in str(file):
                 continue
+            tree = et.parse(file)
+            root = tree.getroot()
+            root_tag = root.tag.rstrip('nmrML')
             try:
-                tree = et.parse(file)
-                root = tree.getroot()
-                root_tag = root.tag.rstrip('nmrML')
-                try:
-                    frequency = next(root.iter(f'{root_tag}effectiveExcitationField')).get('value')
-                except:
-                    frequency = None
-                try:
-                    reference = next(root.iter(f'{root_tag}chemicalShiftStandard')).get('name')
-                except:
-                    reference = None
-                ph = concentration = concentration_units = temperature = temperature_units = None
-                spectrum_id = f'{metabolite_id}.{i+1}'
-                original_data = [spectrum_id, metabolite_id, frequency, reference, ph, concentration, concentration_units, temperature, temperature_units]
-                self.get_xml_spectrum_data(file, metabolite_id, spectrum_id, original_data)
-                peak_count = 1
-                for j, multiplet in enumerate(root.iter(f'{root_tag}multiplet')):
-                    multiplet_id = f'{spectrum_id}.{j + 1}'
-                    center = multiplet.get('center')
-                    atom_ref = multiplet.find(f'{root_tag}atoms').get('atomRefs')
-                    multiplicity = multiplet.find(f'{root_tag}multiplicity').get('name')
-                    multiplet_data = pd.DataFrame([[multiplet_id, spectrum_id, center, atom_ref, multiplicity]], columns=self.multiplettitles)
-                    if self.multiplets is None:
-                        self.multiplets = multiplet_data
-                    else:
-                        self.multiplets = self.multiplets.append(multiplet_data)
-                    for k, peak in enumerate(multiplet.find(f'{root_tag}peakList').findall(f'{root_tag}peak')):
-                        peak_id = f'{spectrum_id}.{peak_count}'
-                        shift = peak.get('center')
-                        intensity = peak.get('amplitude')
-                        width = peak.get('width')
-                        peak_data = pd.DataFrame([[peak_id, spectrum_id, multiplet_id, shift, intensity, width]], columns=self.peaktitles)
-                        if self.peaks is None:
-                            self.peaks = peak_data
-                        else:
-                            self.peaks = self.peaks.append(peak_data)
-                        peak_count += 1
-            except Exception as e:
-                print(f'Unable to parse file {file.name}')
+                sample_data['reference'] = next(root.iter(f'{root_tag}chemicalShiftStandard')).get('name')
+            except:
+                pass
+            try:
+                spectrum_data['frequency'] = next(root.iter(f'{root_tag}effectiveExcitationField')).get('value')
+            except:
+                pass
+            self.get_xml_spectrum_data(file, sample_data, spectrum_data)
+            peak_count = 1
+            for j, multiplet in enumerate(root.iter(f'{root_tag}multiplet')):
+                multiplet_id = f'MT:{spectrum_id.split(":")[-1]}.{j + 1}'
+                multiplet_data = {'multiplet_id': multiplet_id,
+                                  'spectrum_id': spectrum_id,
+                                  'center': multiplet.get('center'),
+                                  'atom_ref': multiplet.find(f'{root_tag}atoms').get('atomRefs'),
+                                  'multiplicity': multiplet.find(f'{root_tag}multiplicity').get('name')}
+                self.multiplets.loc[self.multiplet_key] = multiplet_data
+                self.multiplet_key += 1
+                for k, peak in enumerate(multiplet.find(f'{root_tag}peakList').findall(f'{root_tag}peak')):
+                    peak_data = {'peak_id': f'PK{spectrum_id.split(":")[-1]}.{peak_count + 1}',
+                                 'spectrum_id': spectrum_id,
+                                 'multiplet_id': multiplet_id,
+                                 'shift': peak.get('center'),
+                                 'intensity': peak.get('amplitude'),
+                                 'width': peak.get('width')}
+                    self.peaks.loc[self.peak_key] = peak_data
+                    self.peak_key += 1
+                    peak_count += 1
 
     def parsetext(self, files, metabolite_id):
         # takes a set of text file filenames, gathers chemical shift data and formats it to fit the SQL schema
         directory = self.directory.joinpath('HMDB_files/hmdb_nmr_peak_lists')
         for i, file in enumerate(files):
-            spectrum_id = f'{metabolite_id}.{i+1}'
-            original_data = [spectrum_id, metabolite_id, None, None, None, None, None, None, None]
+            sample_id = f'SA:{self.sample_key}'
+            spectrum_id = f'SP:{self.spectrum_key}'
+            sample_data = {'sample_id': sample_id}
+            spectrum_data = {'spectrum_id': spectrum_id,
+                             'sample_id': sample_id}
             file = directory.joinpath(file)
-            self.get_xml_spectrum_data(file, metabolite_id, spectrum_id, original_data)
+            self.get_xml_spectrum_data(file, sample_data, spectrum_data)
             locations = self.find_tables(file)
             multiplets = self.get_text_data(file, 'multiplets', locations)
             peaks = self.get_text_data(file, 'peaks', locations)
             peak_count = 1
             if multiplets is not None:
-                for index, multiplet in multiplets.iterrows():
+                for j, multiplet in multiplets.iterrows():
                     ppmrange = [float(num) for num in multiplet['(ppm)'].split(' .. ')]
-                    multiplet_id = f'{metabolite_id}.{index+1}'
+                    multiplet_id = f'MT:{spectrum_id.split(":")[-1]}.{j + 1}'
+                    multiplet_data = {'multiplet_id': multiplet_id,
+                                      'spectrum_id': spectrum_id,}
                     if 'Shift1(ppm)' in multiplets.columns:
-                        center = multiplet['Shift1(ppm)']
+                        multiplet_data['center'] = multiplet['Shift1(ppm)']
                     else:
-                        center = statistics.mean(ppmrange)
+                        multiplet_data['center'] = statistics.mean(ppmrange)
                     if 'Atom1' in multiplets.columns:
-                        atom_ref = multiplet['Atom1']
-                    else:
-                        atom_ref = None
-                    multiplicity = multiplet['Type']
-                    multiplet_data = pd.DataFrame([[multiplet_id, spectrum_id, center, atom_ref, multiplicity]], columns=self.multiplettitles)
-                    if self.multiplets is None:
-                        self.multiplets = multiplet_data
-                    else:
-                        self.multiplets = self.multiplets.append(multiplet_data)
-                    for index, peak in peaks.iterrows():
+                        multiplet_data['atom_ref'] = multiplet['Atom1']
+                    multiplet_data['multiplicity'] = multiplet['Type']
+                    self.multiplets.loc[self.multiplet_key] = multiplet_data
+                    self.multiplet_key += 1
+                    for k, peak in peaks.iterrows():
                         if min(ppmrange) < float(peak[1]) < max(ppmrange):
-                            peak_id = f'{spectrum_id}.{peak_count}'
-                            shift = peak['(ppm)']
-                            intensity = peak['Height']
-                            width = None
-                            peak_data = pd.DataFrame([[peak_id, spectrum_id, multiplet_id, shift, intensity, width]], columns=self.peaktitles)
-                            if self.peaks is None:
-                                self.peaks = peak_data
-                            else:
-                                self.peaks = self.peaks.append(peak_data)
+                            peak_data = {'peak_id': f'PK{spectrum_id.split(":")[-1]}.{peak_count + 1}',
+                                         'spectrum_id': spectrum_id,
+                                         'multiplet_id': multiplet_id,
+                                         'shift': peak['(ppm)'],
+                                         'intensity': peak['Height']}
+                            self.peaks.loc[self.peak_key] = peak_data
+                            self.peak_key += 1
                             peak_count += 1
 
     def parsexml(self, files, metabolite_id):
@@ -343,21 +343,21 @@ class Reader:
         # by default, xml files do not have multiplet data so this method skips multiplets
         for i, file in enumerate(files):
             file = self.directory.joinpath(f'HMDB_files/xml_files/{file}')
-            spectrum_id = f'{metabolite_id}.{i+1}'
-            root = self.get_xml_spectrum_data(file, metabolite_id, spectrum_id)
+            sample_id = f'SA:{self.sample_key}'
+            spectrum_id = f'SP:{self.spectrum_key}'
+            sample_data = {'sample_id': sample_id}
+            spectrum_data = {'spectrum_id': spectrum_id,
+                             'sample_id': sample_id}
+            root = self.get_xml_spectrum_data(file, sample_data, spectrum_data)
             for j, peak in enumerate(root.iter('nmr-one-d-peak')):
-                peak_id = f'{spectrum_id}.{j}'
-                shift = peak.find('chemical-shift').text
-                intensity = peak.find('intensity').text
-                width = None
-                multiplet_id = None
-                peak_data = pd.DataFrame([[peak_id, spectrum_id, multiplet_id, shift, intensity, width]], columns=self.peaktitles)
-                if self.peaks is None:
-                    self.peaks = peak_data
-                else:
-                    self.peaks = self.peaks.append(peak_data)
+                peak_data = {'peak_id': f'PK{spectrum_id.split(":")[-1]}.{j + 1}',
+                             'spectrum_id': spectrum_id,
+                             'shift': peak.find('chemical-shift').text,
+                             'intensity': peak.find('intensity').text}
+                self.peaks.loc[self.peak_key] = peak_data
+                self.peak_key += 1
 
-    def get_xml_spectrum_data(self, file, metabolite_id, spectrum_id, original_data=None):
+    def get_xml_spectrum_data(self, file, sample_data, spectrum_data):
         # in a separate method to allow all file reader methods to check metadata from the relevant xml file
         # tries to get xml experiment data but prioritises already existing data from nmrML files
         if file.suffix == '.xml':
@@ -367,38 +367,33 @@ class Reader:
         elif file.suffix == '.txt':
             specnum = str(file).split('_')[-2]
         if specnum is not None:
-            xmlfiles = os.listdir('/home/mh491/Database/HMDB_files/xml_files')
+            xmlfiles = os.listdir(self.directory.joinpath('HMDB_files/xml_files'))
             filetargets = [f for f in xmlfiles if f'one_d_spectrum_{specnum}' in f]
             if len(filetargets) > 0:
                 file = self.directory.joinpath(f'HMDB_files/xml_files/{filetargets[0]}')
             else:
-                #print(f'no xml file to complement {file}')
-                spectrum_data = pd.DataFrame([original_data], columns=self.spectratitles)
-                self.add_spectrum_data(spectrum_data)
+                # print(f'no xml file to complement {file}')
+                self.samples.loc[self.sample_key] = sample_data
+                self.sample_key += 1
+                self.spectra.loc[self.spectrum_key] = spectrum_data
+                self.spectrum_key += 1
                 return None
         tree = et.parse(file)
         root = tree.getroot()
-        targets = ['frequency', 'chemical-shift-reference', 'sample-ph', 'sample-concentration',
-                   'sample-concentration-units', 'sample-temperature', 'sample-temperature-units']
-        xml_data = [spectrum_id, metabolite_id]
-        for target in targets:
-            result = self.get_element(root, target)[0]
-            xml_data.append(result)
-        if original_data is not None:
-            new_data = self.overwrite(original_data, xml_data)
-            spectrum_data = pd.DataFrame([new_data], columns=self.spectratitles)
-        else:
-            spectrum_data = pd.DataFrame([xml_data], columns=self.spectratitles)
-        self.add_spectrum_data(spectrum_data)
+        xml_sample = {'pH': self.get_element(root, 'sample-ph')[0],
+                      'amount': self.get_element(root, 'sample-concentration')[0],
+                      'amount_units': self.get_element(root, 'sample-concentration-units')[0],
+                      'reference': self.get_element(root, 'chemical-shift-reference')[0]}
+        xml_spectrum = {'temperature': self.get_element(root, 'sample-temperature')[0],
+                        'temperature_units': self.get_element(root, 'sample-temperature-units')[0],
+                        'frequency': self.get_element(root, 'frequency')[0]}
+        sample_data.update(xml_sample)
+        spectrum_data.update(xml_spectrum)
+        self.samples.loc[self.sample_key] = sample_data
+        self.sample_key += 1
+        self.spectra.loc[self.spectrum_key] = spectrum_data
+        self.spectrum_key += 1
         return root
-
-    def add_spectrum_data(self, spectrum_data):
-        # method that creates or overwrites the spectrum table
-        # was created as get_xml_spectrum_data has to perform this action twice in one call
-        if self.spectra is None:
-            self.spectra = spectrum_data
-        else:
-            self.spectra = self.spectra.append(spectrum_data)
 
     def get_element(self, root, tag):
         # retrieves data from an element in the et tree
@@ -409,14 +404,6 @@ class Reader:
         if len(out) == 0:
             out = [None]
         return out
-
-    def overwrite(self, list1, list2):
-        # method for prioritising which data is used for the entry into the database
-        # priority tp data from list1
-        for i, value in enumerate(list1):
-            if value is None:
-                list1[i] = list2[i]
-        return list1
 
     def get_text_data(self, file, feature, locations):
         # gathers either peak or multiplet data from text files
@@ -479,6 +466,7 @@ class Reader:
         self.multiplets.to_sql('multiplets', self.conn, if_exists='replace', index=False)
         self.peaks.to_sql('peaks', self.conn, if_exists='replace', index=False)
 
+
 if __name__ == "__main__":
     directory = '/home/mh491/Database'
     # builder = Builder(directory)
@@ -487,6 +475,7 @@ if __name__ == "__main__":
 
     reader = Reader(directory)
     reader.run()
+    print(reader.samples)
     print(reader.spectra)
     print(reader.multiplets)
     print(reader.peaks)

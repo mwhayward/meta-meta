@@ -304,7 +304,8 @@ class Reader:
         for i, file in enumerate(files):
             sample_id = f'SA:{self.sample_key}'
             spectrum_id = f'SP:{self.spectrum_key}'
-            sample_data = {'sample_id': sample_id}
+            sample_data = {'sample_id': sample_id,
+                           'metabolite_id': metabolite_id}
             spectrum_data = {'spectrum_id': spectrum_id,
                              'sample_id': sample_id}
             file = directory.joinpath(file)
@@ -346,7 +347,8 @@ class Reader:
             file = self.directory.joinpath(f'HMDB_files/xml_files/{file}')
             sample_id = f'SA:{self.sample_key}'
             spectrum_id = f'SP:{self.spectrum_key}'
-            sample_data = {'sample_id': sample_id}
+            sample_data = {'sample_id': sample_id,
+                           'metabolite_id': metabolite_id}
             spectrum_data = {'spectrum_id': spectrum_id,
                              'sample_id': sample_id}
             root = self.get_xml_spectrum_data(file, sample_data, spectrum_data)

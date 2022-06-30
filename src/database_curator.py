@@ -33,6 +33,10 @@ class Curator:
         for table in tables:
             print(table)
             print(tables[table])
+        for multiplet_id in tables['multiplets']['multiplet_id']:
+            peaks = tables['peaks'].loc[tables['peaks']['multiplet_id'] == multiplet_id]
+            if True in peaks.duplicated(subset=['shift']).values:
+                print(f'duplicate in multiplet {multiplet_id}')
 
 
 if __name__ == "__main__":

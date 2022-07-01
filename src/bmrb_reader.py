@@ -50,6 +50,15 @@ class BMRB_Reader:
                         metabolites[name].append(readfile['data'])
         print(metabolites)
         print(count)
+
+    def find_save_data(self, tree, target):
+        #returns the first instance of save data that matches the given target
+        for save in tree.keys():
+            if not isinstance(tree[save], str):
+                for entity in tree[save].keys():
+                    if target in entity and isinstance(tree[save][entity], str):
+                        return tree[save][entity]
+        print(f'no {target} in {tree["data"]}')
     
     def check_exists(self):
         pass

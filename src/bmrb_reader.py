@@ -63,7 +63,15 @@ class BMRB_Reader:
         # dictionaries for search terms in BMSE files
         targets = {'name': ['save_assembly_1'],
                    'chemical_formula': ['Chem_comp.Formula'],
-                   'smiles': ['Chem_comp_SMILES'],
+                   'smiles': [{'column_target': 'Chem_comp_SMILES.String',
+                               'column_check': 'Chem_comp_SMILES.Type',
+                               'row_target': 'canonical'},
+                              {'column_target': 'Chem_comp_SMILES.String',
+                               'column_check': 'Chem_comp_SMILES.Type',
+                               'row_target': 'Canonical'},
+                              {'column_target': 'Chem_comp_descriptor.Descriptor',
+                               'column_check': 'Chem_comp_descriptor.Type',
+                               'row_target': 'SMILES'}],
                    'inChi': ['Chem_comp.InChI_code'],
                    'pH': ['save_sample_conditions_1', 'save_conditions_1', 'save_conditions_1H_DW'],
                    'amount': ['save_sample_1', 'save_sample_1H_050115_P00_02_IS_DW'],
@@ -92,11 +100,12 @@ class BMRB_Reader:
                         metabolites['description'].append(None)
                         metabolites['chemical_formula'].append(self.find_save_data(tree, 'Chem_comp.Formula'))
                         metabolites['molecular_weight'].append(self.find_save_data(tree, 'Chem_comp.Formula_weight'))
-                        metabolites['smiles'].append(self.find_loop_data(tree, 'Chem_comp_SMILES.String', 'Chem_comp_SMILES.Type', 'canonical'))
+                        metabolites['smiles'].append(self.find_loop_data(tree, targets['smiles']))
                         metabolites['inChi'].append(self.find_save_data(tree, 'Chem_comp.InChI_code'))
         metabolites_df = pd.DataFrame(metabolites)
         print(metabolites_df.smiles)
 
+# todo change method to allow targets (plural) to accomodate more than one possible target
     def find_save_data(self, tree, target):
         # returns the first instance of save data that matches the given target
         # doesn't delve into loops
@@ -108,19 +117,20 @@ class BMRB_Reader:
         print(f'no {target} in {tree["data"]}')
         return None
 
-    def find_loop_data(self, tree, column_target, column_check, row_target):
-        # returns the target info from a loop
+    def find_loop_data(self, tree, targets):
+        # returns the first found target info from a loop
         # requires a known row identifier
         # requires a column name for the known row identifier and for the target data
-        for save in tree.keys():
-            if not isinstance(tree[save], str):
-                for entity in tree[save].keys():
-                    if entity.startswith('loop'):
-                        for dict in tree[save][entity][1]:
-                            if column_target in dict.keys():
-                                if dict[column_check] == row_target:
-                                    return dict[column_target]
-        print(f'no {column_target} in {tree["data"]}')
+        for target in targets:
+            for save in tree.keys():
+                if not isinstance(tree[save], str):
+                    for entity in tree[save].keys():
+                        if entity.startswith('loop'):
+                            for dict in tree[save][entity][1]:
+                                if target['column_target'] in dict.keys():
+                                    if dict[target['column_check']] == target['row_target']:
+                                        return dict[target['column_target']]
+        print(f'no {target["column_target"]} in {tree["data"]}')
         return None
 
     def check_exists(self):

@@ -92,10 +92,10 @@ class BMRB_Reader:
                         metabolites['description'].append(None)
                         metabolites['chemical_formula'].append(self.find_save_data(tree, 'Chem_comp.Formula'))
                         metabolites['molecular_weight'].append(self.find_save_data(tree, 'Chem_comp.Formula_weight'))
-                        metabolites['smiles'].append(self.find_save_data(tree, 'Chem_comp_SMILES'))
+                        metabolites['smiles'].append(self.find_loop_data(tree, 'Chem_comp_SMILES.String', 'Chem_comp_SMILES.Type', 'canonical'))
                         metabolites['inChi'].append(self.find_save_data(tree, 'Chem_comp.InChI_code'))
         metabolites_df = pd.DataFrame(metabolites)
-        print(metabolites_df)
+        print(metabolites_df.smiles)
 
     def find_save_data(self, tree, target):
         # returns the first instance of save data that matches the given target
@@ -106,6 +106,21 @@ class BMRB_Reader:
                     if target == entity:
                         return tree[save][entity]
         print(f'no {target} in {tree["data"]}')
+        return None
+
+    def find_loop_data(self, tree, column_target, column_check, row_target):
+        # returns the target info from a loop
+        # requires a known row identifier
+        # requires a column name for the known row identifier and for the target data
+        for save in tree.keys():
+            if not isinstance(tree[save], str):
+                for entity in tree[save].keys():
+                    if entity.startswith('loop'):
+                        for dict in tree[save][entity][1]:
+                            if column_target in dict.keys():
+                                if dict[column_check] == row_target:
+                                    return dict[column_target]
+        print(f'no {column_target} in {tree["data"]}')
         return None
 
     def check_exists(self):

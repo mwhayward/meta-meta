@@ -63,6 +63,7 @@ class BMRB_Reader:
         # dictionaries for search terms in BMSE files
         targets = {'name': ['save_assembly_1'],
                    'chemical_formula': ['Chem_comp.Formula'],
+                   'molecular_weight': ['Chem_comp.Formula_weight'],
                    'smiles': [{'column_target': 'Chem_comp_SMILES.String',
                                'column_check': 'Chem_comp_SMILES.Type',
                                'row_target': 'canonical'},
@@ -96,24 +97,25 @@ class BMRB_Reader:
                     if name not in metabolites['name']:
                         metabolites['metabolite_id'].append(count)
                         count += 1
+                        for key in [key for key in metabolites.keys() if key is not 'metabolite_id' and key is not 'name' and key is not 'description']:
+                            if isinstance(targets[key][0], str):
+                                metabolites[key].append(self.find_save_data(tree, targets[key]))
+                            else:
+                                metabolites[key].append(self.find_loop_data(tree, targets[key]))
                         metabolites['name'].append(name)
                         metabolites['description'].append(None)
-                        metabolites['chemical_formula'].append(self.find_save_data(tree, 'Chem_comp.Formula'))
-                        metabolites['molecular_weight'].append(self.find_save_data(tree, 'Chem_comp.Formula_weight'))
-                        metabolites['smiles'].append(self.find_loop_data(tree, targets['smiles']))
-                        metabolites['inChi'].append(self.find_save_data(tree, 'Chem_comp.InChI_code'))
         metabolites_df = pd.DataFrame(metabolites)
         print(metabolites_df.smiles)
 
-# todo change method to allow targets (plural) to accomodate more than one possible target
-    def find_save_data(self, tree, target):
+    def find_save_data(self, tree, targets):
         # returns the first instance of save data that matches the given target
         # doesn't delve into loops
-        for save in tree.keys():
-            if not isinstance(tree[save], str):
-                for entity in tree[save].keys():
-                    if target == entity:
-                        return tree[save][entity]
+        for target in targets:
+            for save in tree.keys():
+                if not isinstance(tree[save], str):
+                    for entity in tree[save].keys():
+                        if target == entity:
+                            return tree[save][entity]
         print(f'no {target} in {tree["data"]}')
         return None
 

@@ -26,39 +26,40 @@ class BMRB_Reader:
     def run(self):
         count = 0
         # define the dictionaries for populating
-        metabolites = {'metabolite_id': [],
-                       'name': [],
-                       'description': [],
-                       'chemical_formula': [],
-                       'molecular_weight': [],
-                       'smiles': [],
-                       'inChi': []}
-        samples = {'sample_id': [],
-                   'metabolite_id': [],
-                   'pH': [],
-                   'amount': [],
-                   'reference': []}
-        spectra = {'spectrum_id': [],
-                   'sample_id': [],
-                   'temperature': [],
-                   'frequency': []}
-        multiplets = {'multiplet_id': [],
+        tables = {
+            'metabolites': {'metabolite_id': [],
+                            'name': [],
+                            'description': [],
+                            'chemical_formula': [],
+                            'molecular_weight': [],
+                            'smiles': [],
+                            'inChi': []},
+            'samples': {'sample_id': [],
+                        'metabolite_id': [],
+                        'pH': [],
+                        'amount': [],
+                        'reference': []},
+            'spectra': {'spectrum_id': [],
+                        'sample_id': [],
+                        'temperature': [],
+                        'frequency': []},
+            'multiplets': {'multiplet_id': [],
+                           'spectrum_id': [],
+                           'center': [],
+                           'atom_ref': [],
+                           'multiplicity': []},
+            'peaks': {'peak_id': [],
                       'spectrum_id': [],
-                      'center': [],
-                      'atom_ref': [],
-                      'multiplicity': []}
-        peaks = {'peak_id': [],
-                 'spectrum_id': [],
-                 'multiplet_id': [],
-                 'shift': [],
-                 'intensity': [],
-                 'width': []}
-        synonyms = {'metabolite_id': [],
-                    'synonym': []}
-        isin = {'metabolite_id': [],
-                'group': []}
-        ontology = {'group': [],
-                    'definition': []}
+                      'multiplet_id': [],
+                      'shift': [],
+                      'intensity': [],
+                      'width': []},
+            'synonyms': {'metabolite_id': [],
+                         'synonym': []},
+            'isin': {'metabolite_id': [],
+                     'group': []},
+            'ontology': {'group': [],
+                         'definition': []}}
 
         # dictionaries for search terms in BMSE files
         targets = {'name': ['save_assembly_1'],
@@ -74,8 +75,22 @@ class BMRB_Reader:
                                'column_check': 'Chem_comp_descriptor.Type',
                                'row_target': 'SMILES'}],
                    'inChi': ['Chem_comp.InChI_code'],
-                   'pH': ['save_sample_conditions_1', 'save_conditions_1', 'save_conditions_1H_DW'],
-                   'amount': ['save_sample_1', 'save_sample_1H_050115_P00_02_IS_DW'],
+                   'pH': [{'column_target': 'Sample_condition_variable.Val',
+                           'column_check': 'Sample_condition_variable.Type',
+                           'row_target': 'pH'}],
+                   'amount': [{'column_target': 'Sample_component.Concentration_val',
+                               'column_check': 'Sample_component.Type',
+                               'row_target': 'Solute'},
+                              {'column_target': 'Sample_component.Concentration_val',
+                               'column_check': 'Sample_component.Type',
+                               'row_target': 'solute'}],
+                   'reference': [{'column_target': 'Sample_component.Mol_common_name',
+                                  'column_check': 'Sample_component.Type',
+                                  'row_target': 'Reference'}],
+                   'temperature': [{'column_target': 'Sample_condition_variable.Val',
+                                    'column_check': 'Sample_condition_variable.Type',
+                                    'row_target': 'temperature'}],
+                   'frequency': ['NMR_spectrometer.Field_strength'],
                    'natural_source': ['save_natural_source'],
                    'peaks': ['save_spectral_peak_1H', 'save_spectral_peaks_1D_1H',
                              'save_spectral_peaks_1D_1H_set01', 'save_spectral_peaks_1D_1H_set02',
@@ -90,22 +105,27 @@ class BMRB_Reader:
             if file.endswith('.str'):
                 print(f'{num + 1} out of {len(files)}:    {file}')
                 for tree in nmrstarlib.read_files(str(target_dir.joinpath(file))):
-                    if 'NMR quality control of fragment libraries for screening' in tree['save_entry_information']['Entry.Title']:
+                    if 'NMR quality control of fragment libraries for screening' in tree['save_entry_information'][
+                        'Entry.Title']:
                         name = tree['save_assembly_1']['Assembly.Name'].strip('\n')
                     else:
                         name = tree['save_entry_information']['Entry.Title'].strip('\n')
-                    if name not in metabolites['name']:
-                        metabolites['metabolite_id'].append(count)
+                    if name not in tables['metabolites']['name']:
+                        tables['metabolites']['metabolite_id'].append(count)
                         count += 1
-                        for key in [key for key in metabolites.keys() if key is not 'metabolite_id' and key is not 'name' and key is not 'description']:
+                        key_exceptions = ['metabolite_id', 'sample_id', 'spectrum_id', 'peak_id', 'multiplet_id',
+                                          'name', 'description']
+                        table_exceptions = ['multiplets', 'peaks', 'synonyms', 'isin', 'ontology']
+                        for key, table in [(key, table) for table in tables for key in tables[table] if
+                                           key not in key_exceptions and table not in table_exceptions]:
                             if isinstance(targets[key][0], str):
-                                metabolites[key].append(self.find_save_data(tree, targets[key]))
+                                tables[table][key].append(self.find_save_data(tree, targets[key]))
                             else:
-                                metabolites[key].append(self.find_loop_data(tree, targets[key]))
-                        metabolites['name'].append(name)
-                        metabolites['description'].append(None)
-        metabolites_df = pd.DataFrame(metabolites)
-        print(metabolites_df.smiles)
+                                tables[table][key].append(self.find_loop_data(tree, targets[key]))
+                        tables['metabolites']['name'].append(name)
+                        tables['metabolites']['description'].append(None)
+
+        metabolites_df = pd.DataFrame(tables['metabolites'])
 
     def find_save_data(self, tree, targets):
         # returns the first instance of save data that matches the given target
@@ -132,7 +152,7 @@ class BMRB_Reader:
                                 if target['column_target'] in dict.keys():
                                     if dict[target['column_check']] == target['row_target']:
                                         return dict[target['column_target']]
-        print(f'no {target["column_target"]} in {tree["data"]}')
+        print(f'no {target["row_target"]} in {tree["data"]}')
         return None
 
     def check_exists(self):

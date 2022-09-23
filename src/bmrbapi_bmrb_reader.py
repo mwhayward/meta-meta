@@ -76,6 +76,18 @@ def parse_chemical_shift_saveframe(entry_number):
     get_bmrb_loop(entry_number, 'Spectral_dim')
     pass
 
+
+def create_database(tables):
+    metabolites = pd.DataFrame(tables['metabolites'])
+    metabolites.to_sql('metabolites', conn, if_exists='replace', index=False)
+    samples = pd.DataFrame(tables['samples'])
+    samples.to_sql('samples', conn, if_exists='replace', index=False)
+    spectra = pd.DataFrame(tables['spectra'])
+    spectra.to_sql('spectra', conn, if_exists='replace', index=False)
+    peaks = pd.DataFrame(tables['peaks'])
+    peaks.to_sql('peaks', conn, if_exists='replace', index=False)
+
+
 # Creates a single connection to the database
 directory = Path('/home/mh491/Database/ccpn_metabolites_bmrb.db')
 conn = None
@@ -121,14 +133,7 @@ tables = {'metabolites': {'metabolite_id': [],
                        'definition': []}}
 
 # reset the database
-metabolites = pd.DataFrame(tables['metabolites'])
-metabolites.to_sql('metabolites', conn, if_exists='replace', index=False)
-samples = pd.DataFrame(tables['samples'])
-samples.to_sql('samples', conn, if_exists='replace', index=False)
-spectra = pd.DataFrame(tables['spectra'])
-spectra.to_sql('spectra', conn, if_exists='replace', index=False)
-peaks = pd.DataFrame(tables['peaks'])
-peaks.to_sql('peaks', conn, if_exists='replace', index=False)
+create_database(tables)
 
 # gather the list of bmrb entries
 entries_request = requests.get("http://api.bmrb.io/v2/list_entries?database=metabolomics", headers={"Application": "CCPN_Analysis_Metablomics V3"})
@@ -212,6 +217,8 @@ for number, entry_number in enumerate([entry for entry in entries if entry.start
             for spectrometer_tags_table in spectrometer_tags_tables:
                 if spectrometer_tags_table.loc[spectrometer_tags_table['tag'] == 'ID', 'value'].iloc[0] == spectrometer_id:
                     frequency = spectrometer_tags_table.loc[spectrometer_tags_table['tag'] == 'Field_strength', 'value'].iloc[0]
+                else:
+                    frequency = None
 
             # obtain chemical shift and intensity data from BMRB (filtered by experiment type)
             for table_num, table in enumerate(chem_shift_tables):
@@ -244,13 +251,7 @@ for number, entry_number in enumerate([entry for entry in entries if entry.start
                         spectrum_count += 1
                         spectrum_added = True
     # todo remove break when successfully parse a single entry
-    break
-metabolites = pd.DataFrame(tables['metabolites'])
-metabolites.to_sql('metabolites', conn, if_exists='replace', index=False)
-samples = pd.DataFrame(tables['samples'])
-samples.to_sql('samples', conn, if_exists='replace', index=False)
-spectra = pd.DataFrame(tables['spectra'])
-spectra.to_sql('spectra', conn, if_exists='replace', index=False)
-peaks = pd.DataFrame(tables['peaks'])
-peaks.to_sql('peaks', conn, if_exists='replace', index=False)
+    if metabolite_count >9:
+        break
+create_database(tables)
 

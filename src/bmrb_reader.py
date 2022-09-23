@@ -13,6 +13,40 @@ class BMRB_Reader:
     def __init__(self, directory):
         self.directory = Path(directory)
         self.conn = self.create_connection()
+        self.tables = {'metabolites': {'metabolite_id': [],
+                                       'accession': [],
+                                       'name': [],
+                                       'description': [],
+                                       'chemical_formula': [],
+                                       'molecular_weight': [],
+                                       'smiles': [],
+                                       'inChi': []},
+                       'samples': {'sample_id': [],
+                                   'metabolite_id': [],
+                                   'pH': [],
+                                   'amount': [],
+                                   'reference': []},
+                       'spectra': {'spectrum_id': [],
+                                   'sample_id': [],
+                                   'temperature': [],
+                                   'frequency': []},
+                       'multiplets': {'multiplet_id': [],
+                                      'spectrum_id': [],
+                                      'center': [],
+                                      'atom_ref': [],
+                                      'multiplicity': []},
+                       'peaks': {'peak_id': [],
+                                 'spectrum_id': [],
+                                 'multiplet_id': [],
+                                 'shift': [],
+                                 'intensity': [],
+                                 'width': []},
+                       'synonyms': {'metabolite_id': [],
+                                    'synonym': []},
+                       'isin': {'metabolite_id': [],
+                                'group': []},
+                       'ontology': {'group': [],
+                                    'definition': []}}
 
     def create_connection(self):
         # Creates a single connection to the database
@@ -25,69 +59,8 @@ class BMRB_Reader:
 
     def run(self):
         count = 0
-        # define the dictionaries for populating
-        tables = {
-            'metabolites': {'metabolite_id': [],
-                            'name': [],
-                            'description': [],
-                            'chemical_formula': [],
-                            'molecular_weight': [],
-                            'smiles': [],
-                            'inChi': []},
-            'samples': {'sample_id': [],
-                        'metabolite_id': [],
-                        'pH': [],
-                        'amount': [],
-                        'reference': []},
-            'spectra': {'spectrum_id': [],
-                        'sample_id': [],
-                        'temperature': [],
-                        'frequency': []},
-            'multiplets': {'multiplet_id': [],
-                           'spectrum_id': [],
-                           'center': [],
-                           'atom_ref': [],
-                           'multiplicity': []},
-            'peaks': {'peak_id': [],
-                      'spectrum_id': [],
-                      'multiplet_id': [],
-                      'shift': [],
-                      'intensity': [],
-                      'width': []},
-            'synonyms': {'metabolite_id': [],
-                         'synonym': []},
-            'isin': {'metabolite_id': [],
-                     'group': []},
-            'ontology': {'group': [],
-                         'definition': []}}
-
         # dictionaries for search terms in BMSE files
-        targets = {'name': ['save_assembly_1'],
-                   'chemical_formula': ['Chem_comp.Formula'],
-                   'molecular_weight': ['Chem_comp.Formula_weight'],
-                   'smiles': [{'column_target': 'Chem_comp_SMILES.String',
-                               'column_check': 'Chem_comp_SMILES.Type',
-                               'row_target': 'canonical'},
-                              {'column_target': 'Chem_comp_SMILES.String',
-                               'column_check': 'Chem_comp_SMILES.Type',
-                               'row_target': 'Canonical'},
-                              {'column_target': 'Chem_comp_descriptor.Descriptor',
-                               'column_check': 'Chem_comp_descriptor.Type',
-                               'row_target': 'SMILES'}],
-                   'inChi': ['Chem_comp.InChI_code'],
-                   'pH': [{'column_target': 'Sample_condition_variable.Val',
-                           'column_check': 'Sample_condition_variable.Type',
-                           'row_target': 'pH'}],
-                   'amount': [{'column_target': 'Sample_component.Concentration_val',
-                               'column_check': 'Sample_component.Type',
-                               'row_target': 'Solute'},
-                              {'column_target': 'Sample_component.Concentration_val',
-                               'column_check': 'Sample_component.Type',
-                               'row_target': 'solute'}],
-                   'reference': [{'column_target': 'Sample_component.Mol_common_name',
-                                  'column_check': 'Sample_component.Type',
-                                  'row_target': 'Reference'}],
-                   'temperature': [{'column_target': 'Sample_condition_variable.Val',
+        targets = {'temperature': [{'column_target': 'Sample_condition_variable.Val',
                                     'column_check': 'Sample_condition_variable.Type',
                                     'row_target': 'temperature'}],
                    'frequency': ['NMR_spectrometer.Field_strength'],
@@ -105,27 +78,63 @@ class BMRB_Reader:
             if file.endswith('.str'):
                 print(f'{num + 1} out of {len(files)}:    {file}')
                 for tree in nmrstarlib.read_files(str(target_dir.joinpath(file))):
-                    if 'NMR quality control of fragment libraries for screening' in tree['save_entry_information'][
-                        'Entry.Title']:
-                        name = tree['save_assembly_1']['Assembly.Name'].strip('\n')
-                    else:
-                        name = tree['save_entry_information']['Entry.Title'].strip('\n')
-                    if name not in tables['metabolites']['name']:
-                        tables['metabolites']['metabolite_id'].append(count)
-                        count += 1
-                        key_exceptions = ['metabolite_id', 'sample_id', 'spectrum_id', 'peak_id', 'multiplet_id',
-                                          'name', 'description']
-                        table_exceptions = ['multiplets', 'peaks', 'synonyms', 'isin', 'ontology']
-                        for key, table in [(key, table) for table in tables for key in tables[table] if
-                                           key not in key_exceptions and table not in table_exceptions]:
-                            if isinstance(targets[key][0], str):
-                                tables[table][key].append(self.find_save_data(tree, targets[key]))
-                            else:
-                                tables[table][key].append(self.find_loop_data(tree, targets[key]))
-                        tables['metabolites']['name'].append(name)
-                        tables['metabolites']['description'].append(None)
+                    metabolite_id = f'SU:{num+1}'
+                    self.get_metabolite_data(tree, metabolite_id)
+        metabolites_df = pd.DataFrame(self.tables['metabolites'])
 
-        metabolites_df = pd.DataFrame(tables['metabolites'])
+    def get_metabolite_data(self, tree, metabolite_id):
+        targets = {'chemical_formula': ['Chem_comp.Formula'],
+                   'molecular_weight': ['Chem_comp.Formula_weight'],
+                   'smiles': [{'column_target': 'Chem_comp_SMILES.String',
+                               'column_check': 'Chem_comp_SMILES.Type',
+                               'row_target': 'canonical'},
+                              {'column_target': 'Chem_comp_SMILES.String',
+                               'column_check': 'Chem_comp_SMILES.Type',
+                               'row_target': 'Canonical'},
+                              {'column_target': 'Chem_comp_descriptor.Descriptor',
+                               'column_check': 'Chem_comp_descriptor.Type',
+                               'row_target': 'SMILES'}],
+                   'inChi': ['Chem_comp.InChI_code']}
+        if 'NMR quality control of fragment libraries for screening' in tree['save_entry_information'][
+            'Entry.Title']:
+            name = tree['save_assembly_1']['Assembly.Name'].strip('\n')
+        else:
+            name = tree['save_entry_information']['Entry.Title'].strip('\n')
+        for key in targets:
+            if isinstance(targets[key][0], str):
+                self.tables['metabolites'][key].append(self.find_save_data(tree, targets[key]))
+            else:
+                self.tables['metabolites'][key].append(self.find_loop_data(tree, targets[key]))
+        accession = tree['data']
+        self.tables['metabolites']['accession'].append(accession)
+        self.tables['metabolites']['metabolite_id'].append(metabolite_id)
+        self.tables['metabolites']['name'].append(name)
+        self.tables['metabolites']['description'].append(None)
+        for i, sample in [sample for sample in tree if sample.starswith('save_sample') and 'conditions' not in sample]:
+            sample_id = f'SA:{i+1}'
+            sample_number = tree[sample]['Sample.ID']
+            self.get_sample_data(tree, metabolite_id, sample_id, sample_number)
+
+    def get_sample_data(self, tree, metabolite_id, sample_id, sample_number):
+        targets = {'pH': [{'column_target': 'Sample_condition_variable.Val',
+                           'column_check': 'Sample_condition_variable.Type',
+                           'row_target': 'pH'}],
+                   'amount': [{'column_target': 'Sample_component.Concentration_val',
+                               'column_check': 'Sample_component.Type',
+                               'row_target': 'Solute'},
+                              {'column_target': 'Sample_component.Concentration_val',
+                               'column_check': 'Sample_component.Type',
+                               'row_target': 'solute'}],
+                   'reference': [{'column_target': 'Sample_component.Mol_common_name',
+                                  'column_check': 'Sample_component.Type',
+                                  'row_target': 'Reference'}]}
+        for line in enumerate(tree['save_experiment_list']['loop_0']):
+            if '1D' in line['Experiment.Name'] and '1H' in line['Experiment.Name'] and line['Experiment.Sample_ID'] == sample_number:
+                experiment_id = line['Experiment.ID']
+        self.tables['samples']['sample_id'].append(sample_id)
+        self.tables['samples']['metabolite_id'].append(metabolite_id)
+        for key in targets:
+            self.tables[self.samples][key].append(self.find_loop_data(tree, targets[key]))
 
     def find_save_data(self, tree, targets):
         # returns the first instance of save data that matches the given target
@@ -154,9 +163,6 @@ class BMRB_Reader:
                                         return dict[target['column_target']]
         print(f'no {target["row_target"]} in {tree["data"]}')
         return None
-
-    def check_exists(self):
-        pass
 
 
 if __name__ == "__main__":

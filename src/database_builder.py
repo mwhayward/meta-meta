@@ -411,7 +411,7 @@ class Reader:
     def get_text_data(self, file, feature, locations):
         # gathers either peak or multiplet data from text files
         # returns a pandas dataframe identical to the one from the text file
-        if locations is 'C13':
+        if locations == 'C13':
             return None
         startline = locations[feature]
         if startline == -1:

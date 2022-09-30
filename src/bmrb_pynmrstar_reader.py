@@ -85,9 +85,6 @@ class BMRB_Reader:
         peaks.to_sql('synonyms', self.conn, if_exists='replace', index=False)
 
     def run(self):
-        sample_added = False
-        spectrum_added = False
-
         # put all files from the target directory into a list
         target_dir = self.directory.joinpath('BMRB_files/bmrb_nmr_spectra')
         files = os.listdir(target_dir)
@@ -196,6 +193,7 @@ class BMRB_Reader:
                 print(f'more than one experiment conditions table in entry {entry_number}')
             spectrometer_tags_tables = self.get_saveframe_tags(entry, 'NMR_spectrometer')
             for sample_table in sample_tables:
+                sample_added = False
                 sample_id = f'SA:{sample_count}'
                 bmrb_sample_id = sample_table.loc[0, 'Sample_ID']
                 try:
@@ -221,6 +219,7 @@ class BMRB_Reader:
                     except:
                         temperature = None
                 for index, row in experiment_tables[0].iterrows():
+                    spectrum_added = False
                     spectrum_id = f'SP:{spectrum_count}'
                     experiment_id = row['ID']
                     spectrometer_id = row['NMR_spectrometer_ID']
@@ -276,6 +275,7 @@ class BMRB_Reader:
                     self.tables['synonyms']['synonym'].append(synonym_tag[0])
 
         # print out the failed parse data
+        # todo record the names of the failed files with reasons in a csv file
         print(f'Number of files with no peak data; {fail_counts["peaklist"]}')
         print(f'Number of files with poor chemical shift data; {fail_counts["chem_shift"]}')
         print(f'Number of files with poor peak intensity data; {fail_counts["intensity"]}')

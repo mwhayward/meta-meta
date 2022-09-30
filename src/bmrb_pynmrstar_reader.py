@@ -98,7 +98,7 @@ class BMRB_Reader:
 
         # iterate through each file
         for file in files:
-            print(file)
+            # print(file)
             # create the pynmrstar entry object for the file we are working with
             filepath = target_dir.joinpath(file)
             entry = pynmrstar.Entry.from_file(str(filepath))
@@ -180,8 +180,6 @@ class BMRB_Reader:
                                                'sample_id': sample_id}
             sample_tables = self.get_loop_tables(entry, 'Sample_component')
             sample_condition_tables = self.get_loop_tables(entry, 'Sample_condition_variable')
-            if len(sample_condition_tables) > 1:
-                print(f'more than one sample condition in entry {entry_number}')
             experiment_tables = self.get_loop_tables(entry, 'Experiment')
             if len(experiment_tables) > 1:
                 print(f'more than one experiment conditions table in entry {entry_number}')
@@ -202,14 +200,15 @@ class BMRB_Reader:
                         reference = sample_table.loc[sample_table['Type'] == 'reference', 'Mol_common_name'].iloc[0]
                     except:
                         reference = None
-                try:
-                    ph = sample_condition_tables[0].loc[sample_condition_tables[0]['Type'] == 'pH', 'Val'].iloc[0]
-                except:
-                    ph = None
-                try:
-                    temperature = sample_condition_tables[0].loc[sample_condition_tables[0]['Type'] == 'temperature', 'Val'].iloc[0]
-                except:
-                    temperature = None
+                for sample_condition_table in [table for table in sample_condition_tables if table.loc[0, 'Sample_condition_list_ID'] == '1']:
+                    try:
+                        ph = sample_condition_table.loc[sample_condition_table['Type'] == 'pH', 'Val'].iloc[0]
+                    except:
+                        ph = None
+                    try:
+                        temperature = sample_condition_table.loc[sample_condition_table['Type'] == 'temperature', 'Val'].iloc[0]
+                    except:
+                        temperature = None
                 for index, row in experiment_tables[0].iterrows():
                     spectrum_id = f'SP:{spectrum_count}'
                     experiment_id = row['ID']

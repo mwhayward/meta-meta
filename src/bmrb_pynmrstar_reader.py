@@ -81,6 +81,8 @@ class BMRB_Reader:
         spectra.to_sql('spectra', self.conn, if_exists='replace', index=False)
         peaks = pd.DataFrame(self.tables['peaks'])
         peaks.to_sql('peaks', self.conn, if_exists='replace', index=False)
+        peaks = pd.DataFrame(self.tables['synonyms'])
+        peaks.to_sql('synonyms', self.conn, if_exists='replace', index=False)
 
     def run(self):
         sample_added = False
@@ -94,7 +96,10 @@ class BMRB_Reader:
         metabolite_count = 1
         sample_count = 1
         spectrum_count = 1
-        fail_count = 0
+        fail_counts = {'peaklist': 0,
+                       'chem_shift': 0,
+                       'intensity': 0,
+                       'total': 0}
 
         # iterate through each file
         for file in files:
@@ -106,6 +111,8 @@ class BMRB_Reader:
             # clause to skip any files that do not have spectral peak data in this form
             if not len(entry.get_saveframes_by_category('spectral_peak_list')) > 0:
                 print(f'no spectral_peak_list in file {file}')
+                fail_counts['peaklist'] += 1
+                fail_counts['total'] += 1
                 continue
 
             # find the dimension details for all spectral peak lists
@@ -123,11 +130,15 @@ class BMRB_Reader:
                                  table.loc[0, 'Spectral_peak_list_ID'] in peaklist_ids]
             if len(chem_shift_tables) < 1:
                 print(f'insufficient chemical shift data in file {file}')
+                fail_counts['chem_shift'] += 1
+                fail_counts['total'] += 1
                 continue
             intensity_tables = [table for table in self.get_loop_tables(entry, 'Spectral_transition_general_char') if
                                 table.loc[0, 'Spectral_peak_list_ID'] in peaklist_ids]
             if len(intensity_tables) < 1:
                 print(f'insufficient peak intensity data in file {file}')
+                fail_counts['intensity'] += 1
+                fail_counts['total'] += 1
                 continue
 
             # setup the base variables for the metabolite
@@ -251,6 +262,24 @@ class BMRB_Reader:
                                 spectrum_count += 1
                                 spectrum_added = True
 
+            # populate the synonyms table
+            synonym_tables = self.get_loop_tables(entry, 'Chem_comp_common_name')
+            if len(synonym_tables) == 1:
+                for index, row in synonym_tables[0].iterrows():
+                    if row['Type'] == 'synonym':
+                        self.tables['synonyms']['metabolite_id'].append(metabolite_id)
+                        self.tables['synonyms']['synonym'].append(row['Name'])
+            else:
+                synonym_tag = entry.get_tag('Chem_comp.Synonyms')
+                if synonym_tag[0] != '.':
+                    self.tables['synonyms']['metabolite_id'].append(metabolite_id)
+                    self.tables['synonyms']['synonym'].append(synonym_tag[0])
+
+        # print out the failed parse data
+        print(f'Number of files with no peak data; {fail_counts["peaklist"]}')
+        print(f'Number of files with poor chemical shift data; {fail_counts["chem_shift"]}')
+        print(f'Number of files with poor peak intensity data; {fail_counts["intensity"]}')
+        print(f'Total number of failed files; {fail_counts["total"]}')
 
 if __name__ == "__main__":
     directory = '/home/mh491/Database'

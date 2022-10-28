@@ -81,6 +81,8 @@ class BMRB_Reader:
         spectra.to_sql('spectra', self.conn, if_exists='replace', index=False)
         peaks = pd.DataFrame(self.tables['peaks'])
         peaks.to_sql('peaks', self.conn, if_exists='replace', index=False)
+        peaks = pd.DataFrame(self.tables['multiplets'])
+        peaks.to_sql('multiplets', self.conn, if_exists='replace', index=False)
         peaks = pd.DataFrame(self.tables['synonyms'])
         peaks.to_sql('synonyms', self.conn, if_exists='replace', index=False)
 
@@ -144,7 +146,7 @@ class BMRB_Reader:
 
             # select the most appropriate name from file
             if entry.get_tag('Entry.Title')[0] != 'NMR quality control of fragment libraries for screening\n':
-                name = entry.get_tag('Entry.Title')[0]
+                name = entry.get_tag('Entry.Title')[0].replace(' ', '_').rstrip('\n')
             else:
                 name = entry.get_tag('Chem_comp.Name')[0].replace(',', '_').replace(' ', '_').replace('-', '_').lower().rstrip('\n')
 

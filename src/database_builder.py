@@ -7,6 +7,7 @@ import pandas as pd
 import sqlite3
 from sqlite3 import Error
 import re
+import decimal
 
 
 class Builder:
@@ -193,11 +194,11 @@ class Reader:
         self.directory = Path(directory)
         self.conn = self.create_connection()
 
-        self.sampletitles = ['sample_id', 'metabolite_id', 'pH', 'amount', 'amount_unit', 'reference']
+        self.sampletitles = ['sample_id', 'metabolite_id', 'pH', 'amount', 'amount_units', 'reference']
         self.samples = pd.DataFrame(columns=self.sampletitles)
         self.sample_key = 1
 
-        self.spectratitles = ['spectrum_id', 'sample_id', 'frequency', 'temperature', 'temperature_units']
+        self.spectratitles = ['spectrum_id', 'sample_id', 'frequency', 'temperature']
         self.spectra = pd.DataFrame(columns=self.spectratitles)
         self.spectrum_key = 1
 
@@ -273,9 +274,10 @@ class Reader:
             except:
                 pass
             try:
-                spectrum_data['frequency'] = next(root.iter(f'{root_tag}effectiveExcitationField')).get('value')
+                frequency = next(root.iter(f'{root_tag}effectiveExcitationField')).get('value')
+                spectrum_data['frequency'] = float(frequency)
             except:
-                pass
+                frequency = None
             self.get_xml_spectrum_data(file, sample_data, spectrum_data)
             peak_count = 1
             for j, multiplet in enumerate(root.iter(f'{root_tag}multiplet')):
@@ -288,12 +290,27 @@ class Reader:
                 self.multiplets.loc[self.multiplet_key] = multiplet_data
                 self.multiplet_key += 1
                 for k, peak in enumerate(multiplet.find(f'{root_tag}peakList').findall(f'{root_tag}peak')):
+
+                    # clause to check if the peak chemical shift data is precise
+                    # else tries to take the width which is often the chemical shift in hz
+                    if decimal.Decimal(peak.get('center')).as_tuple().exponent > -3 and frequency is not None and peak.get('width') != '-' and peak.get('width') != '1000.0':
+                        print(f'poor shift data, trying width instead: {peak.get("width")}')
+                        center = float(peak.get('width')) / float(frequency)
+                    else:
+                        center = peak.get('center')
+                    try:
+                        if float(peak.get('width')) > 1:
+                            width = 0.004
+                        else:
+                            width = float(peak.get('width'))
+                    except:
+                        width = 0.004
                     peak_data = {'peak_id': f'PK{spectrum_id.split(":")[-1]}.{peak_count + 1}',
                                  'spectrum_id': spectrum_id,
                                  'multiplet_id': multiplet_id,
-                                 'shift': peak.get('center'),
+                                 'shift': center,
                                  'intensity': peak.get('amplitude'),
-                                 'width': peak.get('width')}
+                                 'width': width}
                     self.peaks.loc[self.peak_key] = peak_data
                     self.peak_key += 1
                     peak_count += 1
@@ -376,27 +393,36 @@ class Reader:
                 file = self.directory.joinpath(f'HMDB_files/xml_files/{filetargets[0]}')
             else:
                 # print(f'no xml file to complement {file}')
-                self.samples.loc[self.sample_key] = sample_data
+                #self.samples.loc[self.sample_key] = sample_data
+                self.samples = self.samples.append(pd.Series(sample_data, index=self.samples.columns[:len(sample_data)]), ignore_index=True)
                 self.sample_key += 1
-                self.spectra.loc[self.spectrum_key] = spectrum_data
+                self.spectra = self.spectra.append(pd.Series(spectrum_data, index=self.spectra.columns[:len(spectrum_data)]), ignore_index=True)
+                #self.spectra.loc[self.spectrum_key] = spectrum_data
                 self.spectrum_key += 1
                 return None
         tree = et.parse(file)
         root = tree.getroot()
-        xml_sample = {'pH': self.get_element(root, 'sample-ph')[0],
-                      'amount': self.get_element(root, 'sample-concentration')[0],
-                      'amount_units': self.get_element(root, 'sample-concentration-units')[0],
-                      'reference': self.get_element(root, 'chemical-shift-reference')[0]}
-        xml_spectrum = {'temperature': self.get_element(root, 'sample-temperature')[0],
-                        'temperature_units': self.get_element(root, 'sample-temperature-units')[0],
-                        'frequency': self.get_element(root, 'frequency')[0]}
-        sample_data.update(xml_sample)
-        spectrum_data.update(xml_spectrum)
+
+        self.add_if_not_exist(sample_data, 'pH', self.get_element(root, 'sample-ph')[0])
+        self.add_if_not_exist(sample_data, 'amount', self.get_element(root, 'sample-concentration')[0])
+        self.add_if_not_exist(sample_data, 'amount_units', self.get_element(root, 'sample-concentration-units')[0])
+        self.add_if_not_exist(sample_data, 'reference', self.get_element(root, 'chemical-shift-reference')[0])
+
+        temperature = self.get_element(root, 'sample-temperature')[0]
+        if temperature:
+            temperature += 273.15
+        self.add_if_not_exist(spectrum_data, 'temperature', temperature)
+        self.add_if_not_exist(spectrum_data, 'frequency', self.get_element(root, 'frequency')[0].split()[0])
+
         self.samples.loc[self.sample_key] = sample_data
         self.sample_key += 1
         self.spectra.loc[self.spectrum_key] = spectrum_data
         self.spectrum_key += 1
         return root
+
+    def add_if_not_exist(self, dictionary, key, value):
+        if key not in dictionary:
+            dictionary[key] = value
 
     def get_element(self, root, tag):
         # retrieves data from an element in the et tree

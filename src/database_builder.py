@@ -216,7 +216,7 @@ class Reader:
         # and at the end of the script to export the tables to a db file
         conn = None
         try:
-            conn = sqlite3.connect(str(self.directory.joinpath('ccpn_metabolites.db')))
+            conn = sqlite3.connect(str(self.directory.joinpath('ccpn_metabolites_curated.db')))
         except Error as e:
             print(e)
         return conn

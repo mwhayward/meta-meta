@@ -224,14 +224,14 @@ class Reader:
     def run(self):
         # this method iterates through the accession numbers of meta data and attempts to gather chemical shift data
         # nmrML files are first priority, followed by text files then xml
-        sql = 'select "metabolite_id", "accession" from metabolites'
+        sql = 'select "metabolite_id", "hmdb_accession" from metabolites'
         metabolites = pd.read_sql(sql, self.conn)
         nmrmlfiles = os.listdir(self.directory.joinpath('HMDB_files/nmrML_experimental_Feb15_2022'))
         textfiles = os.listdir(self.directory.joinpath('HMDB_files/hmdb_nmr_peak_lists'))
         xmlfiles = os.listdir(self.directory.joinpath('HMDB_files/xml_files'))
         for index, metabolite in metabolites.iterrows():
             metabolite_id = metabolite['metabolite_id']
-            accession = metabolite['accession']
+            accession = metabolite['hmdb_accession']
             nmrml_expr = re.compile(f'{accession}_.*_1H.nmrML')
             text_expr = re.compile(f'{accession}_nmroned.*')
             xml_expr = re.compile(f'{accession}_nmr_one_d.*')
@@ -408,7 +408,7 @@ class Reader:
         self.add_if_not_exist(sample_data, 'amount_units', self.get_element(root, 'sample-concentration-units')[0])
         self.add_if_not_exist(sample_data, 'reference', self.get_element(root, 'chemical-shift-reference')[0])
 
-        temperature = self.get_element(root, 'sample-temperature')[0]
+        temperature = float(self.get_element(root, 'sample-temperature')[0])
         if temperature:
             temperature += 273.15
         self.add_if_not_exist(spectrum_data, 'temperature', temperature)

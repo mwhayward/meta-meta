@@ -73,7 +73,7 @@ class Builder:
             """Gather the synonyms for this metabolite"""
             synonyms = self.get_synonyms(elem)
             for syn in synonyms:
-                data = pd.DataFrame([[metabolite_id, syn]], columns=['metabolite_id', 'synonyms'])
+                data = pd.DataFrame([[metabolite_id, syn]], columns=['metabolite_id', 'synonym'])
                 if self.synonyms is None:
                     self.synonyms = data
                 else:

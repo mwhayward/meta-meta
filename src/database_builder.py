@@ -238,18 +238,16 @@ class Reader:
             nmrml_metabolites = list(filter(nmrml_expr.match, nmrmlfiles))
             text_metabolites = list(filter(text_expr.match, textfiles))
             xml_metabolites = list(filter(xml_expr.match, xmlfiles))
+            print(f'{metabolite_id, accession} out of {len(metabolites)}')
             if len(nmrml_metabolites) > 0:
+                print(nmrml_metabolites)
                 self.parsenmrml(nmrml_metabolites, metabolite_id)
             elif len(text_metabolites) > 0:
-                try:
-                    self.parsetext(text_metabolites, metabolite_id)
-                except:
-                    print(f'error with {text_metabolites}')
+                print(text_metabolites)
+                self.parsetext(text_metabolites, metabolite_id)
             elif len(xml_metabolites) > 0:
-                try:
-                    self.parsexml(xml_metabolites, metabolite_id)
-                except:
-                    print(f'error with {xml_metabolites}')
+                print(xml_metabolites)
+                self.parsexml(xml_metabolites, metabolite_id)
             self.save_to_db()
 
     def parsenmrml(self, files, metabolite_id):
@@ -305,7 +303,7 @@ class Reader:
                             width = float(peak.get('width'))
                     except:
                         width = 0.004
-                    peak_data = {'peak_id': f'PK{spectrum_id.split(":")[-1]}.{peak_count + 1}',
+                    peak_data = {'peak_id': f'PK:{spectrum_id.split(":")[-1]}.{peak_count}',
                                  'spectrum_id': spectrum_id,
                                  'multiplet_id': multiplet_id,
                                  'shift': center,
@@ -343,16 +341,19 @@ class Reader:
                         multiplet_data['center'] = statistics.mean(ppmrange)
                     if 'Atom1' in multiplets.columns:
                         multiplet_data['atom_ref'] = multiplet['Atom1']
+                    else:
+                        multiplet_data['atom_ref'] = None
                     multiplet_data['multiplicity'] = multiplet['Type']
                     self.multiplets.loc[self.multiplet_key] = multiplet_data
                     self.multiplet_key += 1
                     for k, peak in peaks.iterrows():
                         if min(ppmrange) < float(peak[1]) < max(ppmrange):
-                            peak_data = {'peak_id': f'PK{spectrum_id.split(":")[-1]}.{peak_count + 1}',
+                            peak_data = {'peak_id': f'PK:{spectrum_id.split(":")[-1]}.{peak_count + 1}',
                                          'spectrum_id': spectrum_id,
                                          'multiplet_id': multiplet_id,
                                          'shift': peak['(ppm)'],
-                                         'intensity': peak['Height']}
+                                         'intensity': peak['Height'],
+                                         'width': 0.004}
                             self.peaks.loc[self.peak_key] = peak_data
                             self.peak_key += 1
                             peak_count += 1
@@ -369,13 +370,24 @@ class Reader:
             spectrum_data = {'spectrum_id': spectrum_id,
                              'sample_id': sample_id}
             root = self.get_xml_spectrum_data(file, sample_data, spectrum_data)
+            if root.find('nucleus').text == '13C':
+                continue
             for j, peak in enumerate(root.iter('nmr-one-d-peak')):
-                peak_data = {'peak_id': f'PK{spectrum_id.split(":")[-1]}.{j + 1}',
+                peak_data = {'peak_id': f'PK:{spectrum_id.split(":")[-1]}.{j + 1}',
                              'spectrum_id': spectrum_id,
+                             'multiplet_id': f'MT.{spectrum_id.split(":")[-1]}.{j + 1}',
                              'shift': peak.find('chemical-shift').text,
-                             'intensity': peak.find('intensity').text}
+                             'intensity': peak.find('intensity').text,
+                             'width': 0.004}
+                multiplet_data = {'multiplet_id': f'MT.{spectrum_id.split(":")[-1]}.{j + 1}',
+                                  'spectrum_id': spectrum_id,
+                                  'center': peak.find('chemical-shift').text,
+                                  'atom_ref': None,
+                                  'multiplicity': None}
                 self.peaks.loc[self.peak_key] = peak_data
                 self.peak_key += 1
+                self.multiplets.loc[self.multiplet_key] = multiplet_data
+                self.multiplet_key += 1
 
     def get_xml_spectrum_data(self, file, sample_data, spectrum_data):
         # in a separate method to allow all file reader methods to check metadata from the relevant xml file
@@ -392,12 +404,9 @@ class Reader:
             if len(filetargets) > 0:
                 file = self.directory.joinpath(f'HMDB_files/xml_files/{filetargets[0]}')
             else:
-                # print(f'no xml file to complement {file}')
-                #self.samples.loc[self.sample_key] = sample_data
                 self.samples = self.samples.append(pd.Series(sample_data, index=self.samples.columns[:len(sample_data)]), ignore_index=True)
                 self.sample_key += 1
                 self.spectra = self.spectra.append(pd.Series(spectrum_data, index=self.spectra.columns[:len(spectrum_data)]), ignore_index=True)
-                #self.spectra.loc[self.spectrum_key] = spectrum_data
                 self.spectrum_key += 1
                 return None
         tree = et.parse(file)
@@ -408,11 +417,15 @@ class Reader:
         self.add_if_not_exist(sample_data, 'amount_units', self.get_element(root, 'sample-concentration-units')[0])
         self.add_if_not_exist(sample_data, 'reference', self.get_element(root, 'chemical-shift-reference')[0])
 
-        temperature = float(self.get_element(root, 'sample-temperature')[0])
+        temperature = self.get_element(root, 'sample-temperature')[0]
         if temperature:
+            temperature = float(temperature)
             temperature += 273.15
         self.add_if_not_exist(spectrum_data, 'temperature', temperature)
-        self.add_if_not_exist(spectrum_data, 'frequency', self.get_element(root, 'frequency')[0].split()[0])
+        frequency = self.get_element(root, 'frequency')[0]
+        if frequency:
+            frequency = float(frequency.split()[0])
+        self.add_if_not_exist(spectrum_data, 'frequency', frequency)
 
         self.samples.loc[self.sample_key] = sample_data
         self.sample_key += 1

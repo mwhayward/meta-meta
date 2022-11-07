@@ -1,3 +1,9 @@
+"""
+First attempt at reading hmdb data and storing into a database.
+Uses SQLite to record the data which was more convoluted than via pandas.
+Is now redundant. See database_builder.py for the most up to date reader which can also read txt and xml.
+"""
+
 import pathlib
 import xml.etree.ElementTree as et
 import sqlite3

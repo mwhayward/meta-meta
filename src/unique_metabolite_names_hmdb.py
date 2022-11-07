@@ -2,6 +2,11 @@ from os import listdir
 from os.path import isfile, join
 import pandas as pd
 
+"""
+This script iterates across all files in the three HMDB folders and gathers accessions and experiment numbers.
+Accessions and experiment numbers are linked to the respective names and output in a csv file.
+"""
+
 metabolites = {'accessions': [],
                'numbers':    []}
 

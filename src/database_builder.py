@@ -11,6 +11,16 @@ import decimal
 
 
 class Builder:
+    """
+    Class for building the metadata tables for the in-house database.
+    Uses a pre-made list of unique metabolite names derived from the collective files, that match name to experiment and
+    accession number.
+    Builds the metabolite table by adding columns whenever a new variable is found, thus it defines its own shape.
+    A few exceptions are given for known tags that should not be accepted.
+    Has a limit of 1430 iterations as local memory gets used up too fast for little reward beyond this.
+    Only needs to be called once, beyond which it is commented out of the main method when experimenting with the
+    reader.
+    """
     def __init__(self, directory):
         self.directory = Path(directory)
         self.conn = self.create_connection()
@@ -35,8 +45,9 @@ class Builder:
         self.concentrations = None
 
     def create_connection(self):
-        # Creates a single connection to the database
-        # This connection is used at the end of the script to export the tables to a db file
+        """
+        Method to create a connection to the database. It is only called once when the class is built
+        """
         conn = None
         try:
             conn = sqlite3.connect(str(self.directory.joinpath('ccpn_metabolites.db')))
@@ -45,19 +56,21 @@ class Builder:
         return conn
 
     def build(self, count, elem):
-        # A method that creates an entry for a single HMDB accession (from an etree element)
-        # Calls the other methods in the Builder class to populate each table
-        # Only gathers data from metabolites that match accession numbers to the files we have
+        """
+        A method that creates an entry for a single HMDB accession (from an etree element).
+        Calls the other methods in the Builder class to populate each table.
+        Only gathers data from metabolites that match accession numbers to the files we have.
+        """
         if elem.find('{http://www.hmdb.ca}accession').text in self.names.index:
 
-            # Gather the bottom level metadata for the metabolite
+            """Gather the bottom level metadata for the metabolite"""
             metabolite_id = f'SU:{count}'
             titles = self.metabolite_titles(elem)
             data = self.metabolite_data(metabolite_id, elem)
             data = pd.DataFrame([data], columns=titles, index=[metabolite_id])
             self.insert_into_table(data)
 
-            # Gather the synonyms for this metabolite
+            """Gather the synonyms for this metabolite"""
             synonyms = self.get_synonyms(elem)
             for syn in synonyms:
                 data = pd.DataFrame([[metabolite_id, syn]], columns=['metabolite_id', 'synonyms'])
@@ -66,12 +79,12 @@ class Builder:
                 else:
                     self.synonyms = self.synonyms.append(data)
 
-            # Gather ontology data for this metabolite
+            """Gather ontology data for this metabolite"""
             ont = elem.find('{http://www.hmdb.ca}ontology')
             tag = '{http://www.hmdb.ca}term'
             self.retrieve_all(metabolite_id, ont, tag)
 
-            # Gather concentration data for this metabolite
+            """Gather concentration data for this metabolite"""
             if elem.find('{http://www.hmdb.ca}normal_concentrations') is not None:
                 concelem = elem.find('{http://www.hmdb.ca}normal_concentrations')
                 for concentration in concelem.getchildren():
@@ -81,14 +94,16 @@ class Builder:
                 for concentration in concelem.getchildren():
                     self.get_concentrations(concentration, metabolite_id)
 
-            # Updates the id number and prints a report to the console
+            """Updates the id number and prints a report to the console"""
             print(f'parsed {count} metabolites out of 1430')
             count += 1
         return count
 
     def metabolite_titles(self, elem, parent=None):
-        # A method for gathering column names for a table from a given etree element
-        # Used for the bottom level metabolite metadata
+        """
+        A method for gathering column names for a table from a given etree element
+        Used for the bottom level metabolite metadata
+        """
         name = elem.tag.split('}', 1)[1]
         titles = ['metabolite_id']
         # titles = [f'{name}_id']
@@ -101,8 +116,10 @@ class Builder:
         return titles
 
     def metabolite_data(self, metabolite_id, elem):
-        # A method for gathering values for a table from a given etree element
-        # Used for the bottom level metabolite metadata
+        """
+        A method for gathering values for a table from a given etree element
+        Used for the bottom level metabolite metadata
+        """
         data = [metabolite_id]
         for child in elem.getchildren():
             if len(child.getchildren()) == 0 and child.tag not in self.exceptions:
@@ -110,14 +127,18 @@ class Builder:
         return data
 
     def insert_into_table(self, data):
-        # A method for creating or appending data to the metabolite dataframe
+        """
+        A method for creating or appending data to the metabolite dataframe
+        """
         if self.metabolites is None:
             self.metabolites = data
         else:
             self.metabolites = self.metabolites.append(data)
 
     def get_synonyms(self, elem):
-        # A method for gathering synonym data from a synonym element
+        """
+        A method for gathering synonym data from a synonym element
+        """
         syn = elem.find('{http://www.hmdb.ca}synonyms')
         synonyms = []
         if len(syn.getchildren()) > 0:
@@ -126,10 +147,12 @@ class Builder:
         return synonyms
 
     def retrieve_all(self, metab_id, elem, tag=None, parent=None):
-        # A method for gathering ontology data
-        # Recursively scans the ontology element for nodes under the 'term' tag
-        # Adds values to the ontology dataframe if they are not already present
-        # Adds values to the isin dataframe
+        """
+        A method for gathering ontology data
+        Recursively scans the ontology element for nodes under the 'term' tag
+        Adds values to the ontology dataframe if they are not already present
+        Adds values to the isin dataframe
+        """
         if len(elem.getchildren()) > 0:
             for child in elem.getchildren():
                 self.retrieve_all(metab_id, child, tag, elem)
@@ -148,9 +171,11 @@ class Builder:
                 self.ontology = self.ontology.append(data)
 
     def get_concentrations(self, concelem, metabolite_id):
-        # A method for gathering concentration data
-        # Used for both normal and abnormal concentration data
-        # Does not add values to the concentration dataframe but returns a dataframe
+        """
+        A method for gathering concentration data
+        Used for both normal and abnormal concentration data
+        Does not add values to the concentration dataframe but returns a dataframe
+        """
         titles = ['metabolite_id']
         data = [metabolite_id]
         for child in concelem.getchildren():
@@ -164,8 +189,10 @@ class Builder:
             self.concentrations = self.concentrations.append(concs)
 
     def save_to_db(self):
-        # Saves all dataframes to the db file
-        # This method is called once from outside the class
+        """
+        Saves all dataframes to the db file
+        This method is called once from outside the class
+        """
         self.metabolites.to_sql('metabolites', self.conn, if_exists='replace', index=False)
         self.synonyms.to_sql('synonyms', self.conn, if_exists='replace', index=False)
         self.isin.to_sql('isin', self.conn, if_exists='replace', index=False)
@@ -173,9 +200,11 @@ class Builder:
         self.concentrations.to_sql('concentrations', self.conn, if_exists='replace', index=False)
 
     def parse_metabolites(self):
-        # A method that parses through the single xml file and builds element trees for each metabolite
-        # Calls the builder 'build' method to create a data entry for each metabolite
-        # Contains a fixed count of 1430 metabolites as any parsing beyond this value results in sigkill
+        """
+        A method that parses through the single xml file and builds element trees for each metabolite
+        Calls the builder 'build' method to create a data entry for each metabolite
+        Contains a fixed count of 1430 metabolites as any parsing beyond this value results in sigkill
+        """
         file = self.directory.joinpath('HMDB_files/hmdb_metabolites.xml')
         nsmap = {}
         count = 1
@@ -190,6 +219,11 @@ class Builder:
 
 
 class Reader:
+    """
+    A class for gathering the sample, spectral, multiplet and peak data for the in-house database.
+    When ran, it parses through three folders of files with grouping based off of accession number.
+    Data is stored in memory as pandas dataframes before being deposited in one go.
+    """
     def __init__(self, directory):
         self.directory = Path(directory)
         self.conn = self.create_connection()
@@ -211,9 +245,11 @@ class Reader:
         self.peak_key = 1
 
     def create_connection(self):
-        # Creates a single connection to the database
-        # This connection is used at the beginning of the script to collect accession numbers
-        # and at the end of the script to export the tables to a db file
+        """
+        Creates a single connection to the database.
+        This connection is used at the beginning of the script to collect accession numbers and at the end of the script
+        to export the tables to a db file.
+        """
         conn = None
         try:
             conn = sqlite3.connect(str(self.directory.joinpath('ccpn_metabolites_curated.db')))
@@ -222,8 +258,10 @@ class Reader:
         return conn
 
     def run(self):
-        # this method iterates through the accession numbers of meta data and attempts to gather chemical shift data
-        # nmrML files are first priority, followed by text files then xml
+        """
+        This method iterates through the accession numbers of meta data and attempts to gather chemical shift data.
+        nmrML files are first priority, followed by text files then xml.
+        """
         sql = 'select "metabolite_id", "hmdb_accession" from metabolites'
         metabolites = pd.read_sql(sql, self.conn)
         nmrmlfiles = os.listdir(self.directory.joinpath('HMDB_files/nmrML_experimental_Feb15_2022'))
@@ -251,8 +289,10 @@ class Reader:
             self.save_to_db()
 
     def parsenmrml(self, files, metabolite_id):
-        # method for gathering sample/spectrum/multiplet/peak data from nmrML files
-        # calls xml files to cover the shortcomings of nmrML with sample/spectrum data
+        """
+        Method for gathering sample/spectrum/multiplet/peak data from nmrML files.
+        Calls xml files to cover the shortcomings of nmrML with sample/spectrum data.
+        """
         directory = self.directory.joinpath('HMDB_files/nmrML_experimental_Feb15_2022')
         for i, file in enumerate(files):
             sample_id = f'SA:{self.sample_key}'
@@ -314,7 +354,9 @@ class Reader:
                     peak_count += 1
 
     def parsetext(self, files, metabolite_id):
-        # takes a set of text file filenames, gathers chemical shift data and formats it to fit the SQL schema
+        """
+        Takes a set of text file filenames, gathers chemical shift data and formats it to fit the SQL schema.
+        """
         directory = self.directory.joinpath('HMDB_files/hmdb_nmr_peak_lists')
         for i, file in enumerate(files):
             sample_id = f'SA:{self.sample_key}'
@@ -360,8 +402,11 @@ class Reader:
                             peak_count += 1
 
     def parsexml(self, files, metabolite_id):
-        # method for parsing xml files from hmdb
-        # by default, xml files do not have multiplet data so this method skips multiplets
+        """
+        Method for parsing xml files from hmdb.
+        By default, xml files do not have multiplet data so this method skips assigns each peak to its own multiplet.
+        Calls the get_xml_spectrum_data method to get sample and spectrum data.
+        """
         for i, file in enumerate(files):
             file = self.directory.joinpath(f'HMDB_files/xml_files/{file}')
             sample_id = f'SA:{self.sample_key}'
@@ -392,8 +437,12 @@ class Reader:
                 self.multiplet_key += 1
 
     def get_xml_spectrum_data(self, file, sample_data, spectrum_data):
-        # in a separate method to allow all file reader methods to check metadata from the relevant xml file
-        # tries to get xml experiment data but prioritises already existing data from nmrML files
+        """
+        This method collects sample and spectrum data from HMDB xml files.
+        This is separate from the parsexml method to allow all file reader methods to check metadata from the relevant
+        xml file.
+        Tries to get xml spectral and sample data but prioritises already existing data from nmrML files
+        """
         if file.suffix == '.xml':
             specnum = None
         if file.suffix == '.nmrML':
@@ -438,12 +487,17 @@ class Reader:
         return root
 
     def add_if_not_exist(self, dictionary, key, value):
+        """
+        Method to add parameters to a dictionary if the key is not found.
+        Called by get_xml_spectrum_data as a way of supplementing data without overwriting anything.
+        """
         if key not in dictionary:
             dictionary[key] = value
 
     def get_element(self, root, tag):
-        # retrieves data from an element in the et tree
-        # or returns None if it doesn't exist
+        """
+        Retrieves data from an element in the et tree or returns None if it doesn't exist.
+        """
         out = []
         for elem in root.iter(tag):
             out.append(elem.text)
@@ -452,8 +506,10 @@ class Reader:
         return out
 
     def get_text_data(self, file, feature, locations):
-        # gathers either peak or multiplet data from text files
-        # returns a pandas dataframe identical to the one from the text file
+        """
+        Gathers either peak or multiplet data from text files>
+        Returns a pandas dataframe identical to the table from the text file.
+        """
         if locations == 'C13':
             return None
         startline = locations[feature]
@@ -489,8 +545,10 @@ class Reader:
         return df
 
     def find_tables(self, file):
-        # finds the line where the peak and multiplet tables start in the text file
-        # returns a dictionary on success or a string on fail
+        """
+        Finds the line where the peak and multiplet tables start in the text file.
+        Returns a dictionary on success or a string on fail.
+        """
         locations = {}
         file = open(file, 'r')
         for i, line in enumerate(file.readlines()):
@@ -507,7 +565,10 @@ class Reader:
         return locations
 
     def save_to_db(self):
-        # saves the tables generated by the reader to the db file
+        """
+        Saves the tables generated by the reader to the db file.
+        Called once at the end of the run method.
+        """
         self.samples.to_sql('samples', self.conn, if_exists='replace', index=False)
         self.spectra.to_sql('spectra', self.conn, if_exists='replace', index=False)
         self.multiplets.to_sql('multiplets', self.conn, if_exists='replace', index=False)

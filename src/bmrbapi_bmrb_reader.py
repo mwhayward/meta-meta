@@ -5,6 +5,13 @@ from sqlite3 import Error
 import requests
 import json
 
+"""
+Skeleton of a reader that would access bmrb star files online.
+These files would be retrieved as a python onject and parsed.
+Attempt was abandoned as it was very slow and a better alternative was found.
+Many of the methods were salvaged.
+"""
+
 
 def get_bmrb_entry(entry_number):
     # takes entry number

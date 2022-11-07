@@ -1,3 +1,8 @@
+"""
+Initial attempt at a curator class for the in-house database.
+Original idea was to look for duplicates but this effort was put into the reader instead (successfully).
+"""
+
 from pathlib import Path
 import statistics
 import xml.etree.ElementTree as et

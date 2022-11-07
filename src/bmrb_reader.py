@@ -1,3 +1,14 @@
+"""
+Initial attempt at a star file reader.
+Concept of building the dictionaries first gives structure to the databse to be filled.
+This approach required a lot of exceptions being recorded to cover a lot of special cases.
+Used nmrstarlib and nmrpystar which can parse star files but return un-intuitive objects.
+These two packages also become outdated and could not be run on the python 3.8 interpreter.
+An attempt at a recursive method was made to find loop data but was only partially successful.
+This script and class was abandoned in favour of the official bmrb api which is more intuitive and well supported (see
+bmrb_pynmrstar_reader.py).
+"""
+
 from pathlib import Path
 import xml.etree.ElementTree as et
 import nmrstarlib

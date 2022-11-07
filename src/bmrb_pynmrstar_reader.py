@@ -1,3 +1,8 @@
+"""
+Final successful attempt at creating a reader for bmrb star files.
+Uses the official bmrb api.
+"""
+
 import pynmrstar
 import pandas as pd
 import os
@@ -7,6 +12,12 @@ from sqlite3 import Error
 
 
 class BMRB_Reader:
+    """
+    This class contains the methods to parse the bmrb star files that can be downloaded in bulk.
+    Table layout is designed with the creation of the class.
+    Only works with metabolite, synonym, sample, spectra and peak data.
+    Tables for other data is defined but cannot be found in bmrb star files and so are redundant.
+    """
     def __init__(self, directory):
         self.directory = Path(directory)
         self.conn = self.create_connection()
@@ -47,7 +58,9 @@ class BMRB_Reader:
                                     'definition': []}}
 
     def create_connection(self):
-        # Creates a single connection to the database
+        """
+        Creates a single connection to the database that is used to store data.
+        """
         conn = None
         try:
             conn = sqlite3.connect(str(self.directory.joinpath('ccpn_metabolites_bmrb.db')))
@@ -56,8 +69,10 @@ class BMRB_Reader:
         return conn
 
     def get_loop_tables(self, entry, category):
-        # takes the pynmrstar entry object and the target category
-        # returns a list of pandas dataframes
+        """
+        Takes the pynmrstar entry object and the target category.
+        Returns a list of pandas dataframes.
+        """
         loops = entry.get_loops_by_category(category)
         tables = [pd.DataFrame(loop.data, columns=loop.tags)for loop in loops]
         if len(tables)==0:
@@ -66,13 +81,19 @@ class BMRB_Reader:
         return tables
 
     def get_saveframe_tags(self, entry, category):
-        # takes the pynmrstar entry object and the target category
-        # returns a list of pandas dataframes
+        """
+        Takes the pynmrstar entry object and the target category.
+        Returns a list of pandas dataframes.
+        """
         saveframes = entry.get_saveframes_by_category(category)
         saveframe_tags = [pd.DataFrame(saveframe.tags, columns=['tag', 'value']) for saveframe in saveframes]
         return saveframe_tags
 
     def create_database(self):
+        """
+        Takes the table data stored as dictionaries, converts to pandas dataframes and deposits in the database.
+        Replaces already existing data, allowing the reader to be run multiple times without adding redundancies.
+        """
         metabolites = pd.DataFrame(self.tables['metabolites'])
         metabolites.to_sql('metabolites', self.conn, if_exists='replace', index=False)
         samples = pd.DataFrame(self.tables['samples'])
@@ -87,6 +108,10 @@ class BMRB_Reader:
         peaks.to_sql('synonyms', self.conn, if_exists='replace', index=False)
 
     def run(self):
+        """
+        The core method for the reader.
+        Iterates through each file and populates each dictionary.
+        """
         # put all files from the target directory into a list
         target_dir = self.directory.joinpath('BMRB_files/bmrb_nmr_spectra')
         files = os.listdir(target_dir)

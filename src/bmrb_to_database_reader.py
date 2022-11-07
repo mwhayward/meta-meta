@@ -1,3 +1,9 @@
+"""
+Oldest edition of the bmrb reader class.
+Uses SQLite to record the data which was more convoluted than via pandas.
+Is now redundant. See bmrb_pynmrstar_reader.py for the most up to date reader.
+"""
+
 import pathlib
 import xml.etree.ElementTree as et
 import nmrstarlib

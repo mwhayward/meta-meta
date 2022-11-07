@@ -194,11 +194,11 @@ class Reader:
         self.directory = Path(directory)
         self.conn = self.create_connection()
 
-        self.sampletitles = ['sample_id', 'metabolite_id', 'pH', 'amount', 'amount_units', 'reference']
+        self.sampletitles = ['sample_id', 'metabolite_id', 'pH', 'amount', 'reference']
         self.samples = pd.DataFrame(columns=self.sampletitles)
         self.sample_key = 1
 
-        self.spectratitles = ['spectrum_id', 'sample_id', 'frequency', 'temperature']
+        self.spectratitles = ['spectrum_id', 'sample_id', 'frequency', 'temperature', 'data_source']
         self.spectra = pd.DataFrame(columns=self.spectratitles)
         self.spectrum_key = 1
 
@@ -260,7 +260,8 @@ class Reader:
                            'metabolite_id': metabolite_id}
             spectrum_id = f'SP:{self.spectrum_key}'
             spectrum_data = {'spectrum_id': spectrum_id,
-                             'sample_id': sample_id}
+                             'sample_id': sample_id,
+                             'data_source': 'nmrML'}
             file = directory.joinpath(file)
             if not str(file).endswith('.nmrML') or not '1H' in str(file):
                 continue
@@ -292,7 +293,6 @@ class Reader:
                     # clause to check if the peak chemical shift data is precise
                     # else tries to take the width which is often the chemical shift in hz
                     if decimal.Decimal(peak.get('center')).as_tuple().exponent > -3 and frequency is not None and peak.get('width') != '-' and peak.get('width') != '1000.0':
-                        print(f'poor shift data, trying width instead: {peak.get("width")}')
                         center = float(peak.get('width')) / float(frequency)
                     else:
                         center = peak.get('center')
@@ -322,7 +322,8 @@ class Reader:
             sample_data = {'sample_id': sample_id,
                            'metabolite_id': metabolite_id}
             spectrum_data = {'spectrum_id': spectrum_id,
-                             'sample_id': sample_id}
+                             'sample_id': sample_id,
+                             'data_source': 'txt'}
             file = directory.joinpath(file)
             self.get_xml_spectrum_data(file, sample_data, spectrum_data)
             locations = self.find_tables(file)
@@ -368,7 +369,8 @@ class Reader:
             sample_data = {'sample_id': sample_id,
                            'metabolite_id': metabolite_id}
             spectrum_data = {'spectrum_id': spectrum_id,
-                             'sample_id': sample_id}
+                             'sample_id': sample_id,
+                             'data_source': 'xml'}
             root = self.get_xml_spectrum_data(file, sample_data, spectrum_data)
             if root.find('nucleus').text == '13C':
                 continue
@@ -403,10 +405,11 @@ class Reader:
             filetargets = [f for f in xmlfiles if f'one_d_spectrum_{specnum}' in f]
             if len(filetargets) > 0:
                 file = self.directory.joinpath(f'HMDB_files/xml_files/{filetargets[0]}')
+                spectrum_data['data_source'] += ' supplemented by xml'
             else:
-                self.samples = self.samples.append(pd.Series(sample_data, index=self.samples.columns[:len(sample_data)]), ignore_index=True)
+                self.samples = self.samples.append(pd.Series(sample_data, index=self.samples.columns), ignore_index=True)
                 self.sample_key += 1
-                self.spectra = self.spectra.append(pd.Series(spectrum_data, index=self.spectra.columns[:len(spectrum_data)]), ignore_index=True)
+                self.spectra = self.spectra.append(pd.Series(spectrum_data, index=self.spectra.columns), ignore_index=True)
                 self.spectrum_key += 1
                 return None
         tree = et.parse(file)
@@ -414,7 +417,6 @@ class Reader:
 
         self.add_if_not_exist(sample_data, 'pH', self.get_element(root, 'sample-ph')[0])
         self.add_if_not_exist(sample_data, 'amount', self.get_element(root, 'sample-concentration')[0])
-        self.add_if_not_exist(sample_data, 'amount_units', self.get_element(root, 'sample-concentration-units')[0])
         self.add_if_not_exist(sample_data, 'reference', self.get_element(root, 'chemical-shift-reference')[0])
 
         temperature = self.get_element(root, 'sample-temperature')[0]
@@ -427,6 +429,8 @@ class Reader:
             frequency = float(frequency.split()[0])
         self.add_if_not_exist(spectrum_data, 'frequency', frequency)
 
+        if root.find('nucleus').text == '13C':
+            return root
         self.samples.loc[self.sample_key] = sample_data
         self.sample_key += 1
         self.spectra.loc[self.spectrum_key] = spectrum_data

@@ -126,8 +126,8 @@ class BMRB_Reader:
                        'total': 0}
 
         # iterate through each file
-        for file in files:
-            # print(file)
+        for num, file in enumerate(files):
+            print(f'{num+1} out of {len(files)} files')
             # create the pynmrstar entry object for the file we are working with
             filepath = target_dir.joinpath(file)
             entry = pynmrstar.Entry.from_file(str(filepath))
@@ -265,12 +265,18 @@ class BMRB_Reader:
                                 peak_id = f'PK:{spectrum_count}.{index+1}'
                                 self.tables['peaks']['peak_id'].append(peak_id)
                                 self.tables['peaks']['spectrum_id'].append(spectrum_id)
-                                self.tables['peaks']['multiplet_id'].append(None)
+                                self.tables['peaks']['multiplet_id'].append(f'MT:{spectrum_count}.{index+1}')
                                 peak_shift = row['Chem_shift_val']
                                 self.tables['peaks']['shift'].append(peak_shift)
                                 peak_intensity = intensity_tables[table_num].loc[index, 'Intensity_val']
                                 self.tables['peaks']['intensity'].append(peak_intensity)
-                                self.tables['peaks']['width'].append(None)
+                                self.tables['peaks']['width'].append(0.004)
+
+                                self.tables['multiplets']['multiplet_id'].append(f'MT:{spectrum_count}.{index+1}')
+                                self.tables['multiplets']['spectrum_id'].append(spectrum_id)
+                                self.tables['multiplets']['center'].append(peak_shift)
+                                self.tables['multiplets']['atom_ref'].append(None)
+                                self.tables['multiplets']['multiplicity'].append('Unknown')
                             if sample_added is False:
                                 self.tables['samples']['sample_id'].append(sample_id)
                                 self.tables['samples']['metabolite_id'].append(metabolite_id)

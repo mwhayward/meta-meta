@@ -250,11 +250,10 @@ class BMRB_Reader:
                     spectrum_id = f'SP:{spectrum_count}'
                     experiment_id = row['ID']
                     spectrometer_id = row['NMR_spectrometer_ID']
+                    frequency = None
                     for spectrometer_tags_table in spectrometer_tags_tables:
                         if spectrometer_tags_table.loc[spectrometer_tags_table['tag'] == 'ID', 'value'].iloc[0] == spectrometer_id:
                             frequency = spectrometer_tags_table.loc[spectrometer_tags_table['tag'] == 'Field_strength', 'value'].iloc[0]
-                        else:
-                            frequency = None
 
                     # obtain chemical shift and intensity data from BMRB (filtered by experiment type)
                     for table_num, table in enumerate(chem_shift_tables):

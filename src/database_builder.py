@@ -252,7 +252,7 @@ class Reader:
         """
         conn = None
         try:
-            conn = sqlite3.connect(str(self.directory.joinpath('ccpn_metabolites_curated.db')))
+            conn = sqlite3.connect(str(self.directory.joinpath('ccpn_metabolites_hmdb.db')))
         except Error as e:
             print(e)
         return conn
@@ -276,7 +276,7 @@ class Reader:
             nmrml_metabolites = list(filter(nmrml_expr.match, nmrmlfiles))
             text_metabolites = list(filter(text_expr.match, textfiles))
             xml_metabolites = list(filter(xml_expr.match, xmlfiles))
-            print(f'{metabolite_id, accession} out of {len(metabolites)}')
+            print(f'\n{metabolite_id, accession} out of {len(metabolites)}')
             if len(nmrml_metabolites) > 0:
                 print(nmrml_metabolites)
                 self.parsenmrml(nmrml_metabolites, metabolite_id)
@@ -308,6 +308,8 @@ class Reader:
             tree = et.parse(file)
             root = tree.getroot()
             root_tag = root.tag.rstrip('nmrML')
+            if len(list(root.iter(f'{root_tag}multiplet'))) < 1:
+                continue
             try:
                 sample_data['reference'] = next(root.iter(f'{root_tag}chemicalShiftStandard')).get('name')
             except:
@@ -317,7 +319,11 @@ class Reader:
                 spectrum_data['frequency'] = float(frequency)
             except:
                 frequency = None
-            self.get_xml_spectrum_data(file, sample_data, spectrum_data)
+            sample_data, spectrum_data = self.supplement_with_xml(file, sample_data, spectrum_data)
+            self.samples = self.samples.append(pd.Series(sample_data, index=self.samples.columns), ignore_index=True)
+            self.sample_key += 1
+            self.spectra = self.spectra.append(pd.Series(spectrum_data, index=self.spectra.columns), ignore_index=True)
+            self.spectrum_key += 1
             peak_count = 1
             for j, multiplet in enumerate(root.iter(f'{root_tag}multiplet')):
                 multiplet_id = f'MT:{spectrum_id.split(":")[-1]}.{j + 1}'
@@ -367,8 +373,14 @@ class Reader:
                              'sample_id': sample_id,
                              'data_source': 'txt'}
             file = directory.joinpath(file)
-            self.get_xml_spectrum_data(file, sample_data, spectrum_data)
             locations = self.find_tables(file)
+            if locations == 'C13':
+                continue
+            sample_data, spectrum_data = self.supplement_with_xml(file, sample_data, spectrum_data)
+            self.samples = self.samples.append(pd.Series(sample_data, index=self.samples.columns), ignore_index=True)
+            self.sample_key += 1
+            self.spectra = self.spectra.append(pd.Series(spectrum_data, index=self.spectra.columns), ignore_index=True)
+            self.spectrum_key += 1
             multiplets = self.get_text_data(file, 'multiplets', locations)
             peaks = self.get_text_data(file, 'peaks', locations)
             peak_count = 1
@@ -416,9 +428,15 @@ class Reader:
             spectrum_data = {'spectrum_id': spectrum_id,
                              'sample_id': sample_id,
                              'data_source': 'xml'}
-            root = self.get_xml_spectrum_data(file, sample_data, spectrum_data)
+            tree = et.parse(file)
+            root = tree.getroot()
             if root.find('nucleus').text == '13C':
                 continue
+            sample_data, spectrum_data = self.xml_sample_and_spectrum_data(root, sample_data, spectrum_data)
+            self.samples = self.samples.append(pd.Series(sample_data, index=self.samples.columns), ignore_index=True)
+            self.sample_key += 1
+            self.spectra = self.spectra.append(pd.Series(spectrum_data, index=self.spectra.columns), ignore_index=True)
+            self.spectrum_key += 1
             for j, peak in enumerate(root.iter('nmr-one-d-peak')):
                 peak_data = {'peak_id': f'PK:{spectrum_id.split(":")[-1]}.{j + 1}',
                              'spectrum_id': spectrum_id,
@@ -436,34 +454,55 @@ class Reader:
                 self.multiplets.loc[self.multiplet_key] = multiplet_data
                 self.multiplet_key += 1
 
-    def get_xml_spectrum_data(self, file, sample_data, spectrum_data):
+    def supplement_with_xml(self, file, sample_data, spectrum_data):
         """
-        This method collects sample and spectrum data from HMDB xml files.
-        This is separate from the parsexml method to allow all file reader methods to check metadata from the relevant
-        xml file.
-        Tries to get xml spectral and sample data but prioritises already existing data from nmrML files
+        Method for gathering data from xml files, specifically for supplementing txt or nmrml files.
+        Takes the txt or nmrml file name, the current sample data and current spectrum data.
+        The method then looks for the appropriate xml file and fills in any gaps in the sample/spectrum data by calling
+        the xml_sample_and_spectrum_data method.
+        Returns updated sample and spectrum data.
         """
-        if file.suffix == '.xml':
-            specnum = None
+        accession = str(file.name).split('_')[0]
         if file.suffix == '.nmrML':
-            specnum = str(file).split('_')[-2]
+            specnum = str(file.name).split('_')[-2]
         elif file.suffix == '.txt':
-            specnum = str(file).split('_')[-2]
-        if specnum is not None:
-            xmlfiles = os.listdir(self.directory.joinpath('HMDB_files/xml_files'))
-            filetargets = [f for f in xmlfiles if f'one_d_spectrum_{specnum}' in f]
-            if len(filetargets) > 0:
-                file = self.directory.joinpath(f'HMDB_files/xml_files/{filetargets[0]}')
-                spectrum_data['data_source'] += ' supplemented by xml'
+            specnum = str(file.name).split('_')[-2]
+        xmlfiles = os.listdir(self.directory.joinpath('HMDB_files/xml_files'))
+        filetargets = [f for f in xmlfiles if f'{accession}_nmr_one_d_spectrum_{specnum}' in f]
+        filematch = 'experiment_number'
+        if len(filetargets) < 1:
+            filematch = 'accession'
+            filetargets = [f for f in xmlfiles if f'{accession}_nmr_one_d_spectrum_' in f]
+        if len(filetargets) < 1:
+            return sample_data, spectrum_data
+        for filetarget in filetargets:
+            file = self.directory.joinpath(f'HMDB_files/xml_files/{filetarget}')
+            tree = et.parse(file)
+            root = tree.getroot()
+            if root.find('nucleus').text == '13C':
+                continue
             else:
-                self.samples = self.samples.append(pd.Series(sample_data, index=self.samples.columns), ignore_index=True)
-                self.sample_key += 1
-                self.spectra = self.spectra.append(pd.Series(spectrum_data, index=self.spectra.columns), ignore_index=True)
-                self.spectrum_key += 1
-                return None
-        tree = et.parse(file)
-        root = tree.getroot()
+                sample_data, spectrum_data = self.xml_sample_and_spectrum_data(root, sample_data, spectrum_data)
+        if spectrum_data['frequency'] is None and filematch == 'experiment_number':
+            accession = str(file).split('_')[0]
+            filetargets = [f for f in xmlfiles if f'{accession}_one_d_spectrum_' in f]
+            for filetarget in filetargets:
+                file = self.directory.joinpath(f'HMDB_files/xml_files/{filetarget}')
+                tree = et.parse(file)
+                root = tree.getroot()
+                if root.find('nucleus').text == '13C':
+                    continue
+                else:
+                    sample_data, spectrum_data = self.xml_sample_and_spectrum_data(root, sample_data, spectrum_data)
+        spectrum_data['data_source'] += ' supplemented by xml'
+        return sample_data, spectrum_data
 
+    def xml_sample_and_spectrum_data(self, root, sample_data, spectrum_data):
+        """
+        Method for collecting sample and spectrum data from xml files.
+        Calls get_element and add_if_not_exist to gather the needed data.
+        Returns updated sample_data and spectrum_data.
+        """
         self.add_if_not_exist(sample_data, 'pH', self.get_element(root, 'sample-ph')[0])
         self.add_if_not_exist(sample_data, 'amount', self.get_element(root, 'sample-concentration')[0])
         self.add_if_not_exist(sample_data, 'reference', self.get_element(root, 'chemical-shift-reference')[0])
@@ -477,14 +516,7 @@ class Reader:
         if frequency:
             frequency = float(frequency.split()[0])
         self.add_if_not_exist(spectrum_data, 'frequency', frequency)
-
-        if root.find('nucleus').text == '13C':
-            return root
-        self.samples.loc[self.sample_key] = sample_data
-        self.sample_key += 1
-        self.spectra.loc[self.spectrum_key] = spectrum_data
-        self.spectrum_key += 1
-        return root
+        return sample_data, spectrum_data
 
     def add_if_not_exist(self, dictionary, key, value):
         """

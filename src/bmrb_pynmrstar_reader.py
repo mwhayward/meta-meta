@@ -239,6 +239,8 @@ class BMRB_Reader:
                 for sample_condition_table in [table for table in sample_condition_tables if table.loc[0, 'Sample_condition_list_ID'] == '1']:
                     try:
                         ph = sample_condition_table.loc[sample_condition_table['Type'] == 'pH', 'Val'].iloc[0]
+                        if ph == 'n/a':
+                            ph = None
                     except:
                         ph = None
                     try:

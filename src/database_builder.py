@@ -228,7 +228,7 @@ class Reader:
         self.directory = Path(directory)
         self.conn = self.create_connection()
 
-        self.sampletitles = ['sample_id', 'metabolite_id', 'pH', 'amount', 'reference']
+        self.sampletitles = ['sample_id', 'metabolite_id', 'pH', 'amount', 'reference', 'solvent']
         self.samples = pd.DataFrame(columns=self.sampletitles)
         self.sample_key = 1
 
@@ -506,6 +506,7 @@ class Reader:
         self.add_if_not_exist(sample_data, 'pH', self.get_element(root, 'sample-ph')[0])
         self.add_if_not_exist(sample_data, 'amount', self.get_element(root, 'sample-concentration')[0])
         self.add_if_not_exist(sample_data, 'reference', self.get_element(root, 'chemical-shift-reference')[0])
+        self.add_if_not_exist(sample_data, 'solvent', self.get_element(root, 'solvent')[0])
 
         temperature = self.get_element(root, 'sample-temperature')[0]
         if temperature:

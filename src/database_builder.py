@@ -504,6 +504,8 @@ class Reader:
         Returns updated sample_data and spectrum_data.
         """
         self.add_if_not_exist(sample_data, 'pH', self.get_element(root, 'sample-ph')[0])
+        if sample_data['pH'] == 'Not Applic':
+            sample_data['pH'] = None
         self.add_if_not_exist(sample_data, 'amount', self.get_element(root, 'sample-concentration')[0])
         self.add_if_not_exist(sample_data, 'reference', self.get_element(root, 'chemical-shift-reference')[0])
         self.add_if_not_exist(sample_data, 'solvent', self.get_element(root, 'solvent')[0])

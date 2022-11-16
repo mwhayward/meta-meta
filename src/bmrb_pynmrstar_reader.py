@@ -35,7 +35,8 @@ class BMRB_Reader:
                                    'temperature': [],
                                    'amount': [],
                                    'units': [],
-                                   'reference': []},
+                                   'reference': [],
+                                   'solvent': []},
                        'spectra': {'spectrum_id': [],
                                    'sample_id': [],
                                    'frequency': []},
@@ -236,10 +237,17 @@ class BMRB_Reader:
                         reference = sample_table.loc[sample_table['Type'] == 'reference', 'Mol_common_name'].iloc[0]
                     except:
                         reference = None
+                try:
+                    solvent = sample_table.loc[sample_table['Type'] == 'Solvent', 'Mol_common_name'].iloc[0]
+                except:
+                    try:
+                        solvent = sample_table.loc[sample_table['Type'] == 'solvent', 'Mol_common_name'].iloc[0]
+                    except:
+                        solvent = None
                 for sample_condition_table in [table for table in sample_condition_tables if table.loc[0, 'Sample_condition_list_ID'] == '1']:
                     try:
                         ph = sample_condition_table.loc[sample_condition_table['Type'] == 'pH', 'Val'].iloc[0]
-                        if ph == 'n/a':
+                        if ph == 'n/a' or ph == 'N/A':
                             ph = None
                     except:
                         ph = None
@@ -286,6 +294,7 @@ class BMRB_Reader:
                                 self.tables['samples']['amount'].append(amount)
                                 self.tables['samples']['units'].append(units)
                                 self.tables['samples']['reference'].append(reference)
+                                self.tables['samples']['solvent'].append(solvent)
                                 sample_count += 1
                                 sample_added = True
                             if spectrum_added is False:
